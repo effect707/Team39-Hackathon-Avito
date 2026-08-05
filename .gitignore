@@ -1,0 +1,25 @@
+.idea/
+.env
+.env.*
+!.env.example
+
+# Backend build and test output
+backend/bin/
+backend/coverage.out
+backend/*.test
+
+# Frontend dependencies, build output, and test artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.vite/
+
+# Runtime data and logs
+*.log
+logs/
+postgres-data/
+pgdata/
+*.pid
+
+# Agent working state
+.superpowers/
