@@ -221,6 +221,72 @@ func TestRouterReturnsJSONErrorEnvelopeForUnknownPathAndMethod(t *testing.T) {
 	}
 }
 
+func TestRouterPreservesServeMuxRouteMetadata(t *testing.T) {
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router.Handle("GET /route-metadata/{id}", func(writer http.ResponseWriter, request *http.Request) {
+		_, _ = writer.Write([]byte(request.Pattern + "|" + request.PathValue("id")))
+	})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/route-metadata/42", nil))
+
+	if got := recorder.Body.String(); got != "GET /route-metadata/{id}|42" {
+		t.Errorf("route metadata = %q, want pattern and path value", got)
+	}
+}
+
+func TestRouterPreservesStreamingFlusher(t *testing.T) {
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router.Handle("GET /stream", func(writer http.ResponseWriter, _ *http.Request) {
+		flusher, ok := writer.(http.Flusher)
+		if !ok {
+			t.Error("response writer does not implement http.Flusher")
+			return
+		}
+		_, _ = writer.Write([]byte("data: ready\n\n"))
+		flusher.Flush()
+	})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/stream", nil))
+
+	if !recorder.Flushed {
+		t.Error("underlying response writer was not flushed")
+	}
+	if got := recorder.Body.String(); got != "data: ready\n\n" {
+		t.Errorf("stream body = %q, want SSE event", got)
+	}
+}
+
+func TestRouterJSONMethodNotAllowedPreservesNativeAllowHeader(t *testing.T) {
+	native := http.NewServeMux()
+	native.HandleFunc("GET /allow/{id}", func(http.ResponseWriter, *http.Request) {})
+	nativeRecorder := httptest.NewRecorder()
+	native.ServeHTTP(nativeRecorder, httptest.NewRequest(http.MethodPost, "/allow/42", nil))
+	if got := nativeRecorder.Header().Get("Allow"); got != "GET, HEAD" {
+		t.Fatalf("native ServeMux Allow = %q, want %q", got, "GET, HEAD")
+	}
+
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router.Handle("GET /allow/{id}", func(http.ResponseWriter, *http.Request) {})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/allow/42", nil)
+	request.Header.Set("X-Request-ID", "allow-123")
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
+	}
+	if got := recorder.Header().Get("Allow"); got != "GET, HEAD" {
+		t.Errorf("Allow = %q, want native ServeMux value %q", got, "GET, HEAD")
+	}
+	want := `{"error":{"code":"METHOD_NOT_ALLOWED","message":"Метод не поддерживается для этого маршрута","request_id":"allow-123"}}` + "\n"
+	if got := recorder.Body.String(); got != want {
+		t.Errorf("body = %q, want %q", got, want)
+	}
+}
+
 func TestRouterWritesStructuredAccessLogForEveryOutcome(t *testing.T) {
 	var output bytes.Buffer
 	previous := slog.Default()

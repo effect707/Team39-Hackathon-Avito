@@ -88,6 +88,37 @@ $ cd backend && env GOTOOLCHAIN=go1.26.4 go vet ./... && env GOTOOLCHAIN=go1.26.
 PASS
 ```
 
+### Native routing and streaming semantics — RED then GREEN
+
+The rereview regression tests failed against the previous router wrapper as expected:
+
+```text
+$ cd backend && env GOTOOLCHAIN=go1.26.4 go test -count=1 -run 'TestRouter(PreservesServeMuxRouteMetadata|PreservesStreamingFlusher|JSONMethodNotAllowedPreservesNativeAllowHeader)$' ./internal/platform/httpapi
+--- FAIL: TestRouterPreservesServeMuxRouteMetadata
+    route metadata = "|", want pattern and path value
+--- FAIL: TestRouterPreservesStreamingFlusher
+    response writer does not implement http.Flusher
+    underlying response writer was not flushed
+--- FAIL: TestRouterJSONMethodNotAllowedPreservesNativeAllowHeader
+    Allow = "", want native ServeMux value "GET, HEAD"
+FAIL
+```
+
+After restoring native `ServeMux.ServeHTTP` matching and preserving response-writer capabilities:
+
+```text
+$ cd backend && env GOTOOLCHAIN=go1.26.4 go test -count=1 -run 'TestRouter(PreservesServeMuxRouteMetadata|PreservesStreamingFlusher|JSONMethodNotAllowedPreservesNativeAllowHeader)$' ./internal/platform/httpapi
+ok      github.com/team39/avito-fair-queue/backend/internal/platform/httpapi    0.544s
+
+$ cd backend && env GOTOOLCHAIN=go1.26.4 go test -race -count=1 -timeout 60s ./...
+ok      github.com/team39/avito-fair-queue/backend/internal/platform/config     1.387s
+ok      github.com/team39/avito-fair-queue/backend/internal/platform/httpapi    1.459s
+ok      github.com/team39/avito-fair-queue/backend/internal/platform/worker     1.803s
+
+$ cd backend && env GOTOOLCHAIN=go1.26.4 go vet ./... && env GOTOOLCHAIN=go1.26.4 go build ./cmd/api ./cmd/worker ./cmd/migrate
+PASS
+```
+
 ## Final verification
 
 Command:

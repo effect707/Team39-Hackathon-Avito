@@ -60,7 +60,7 @@ func (router *Router) HandleDemo(pattern string, handler http.HandlerFunc) {
 }
 
 func (router *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	accessLog(requestID(http.HandlerFunc(router.recoverPanic))).ServeHTTP(writer, request)
+	requestID(accessLog(http.HandlerFunc(router.recoverPanic))).ServeHTTP(writer, request)
 }
 
 func (router *Router) recoverPanic(writer http.ResponseWriter, request *http.Request) {
@@ -70,40 +70,7 @@ func (router *Router) recoverPanic(writer http.ResponseWriter, request *http.Req
 			writeError(writer, request, http.StatusInternalServerError, "INTERNAL", "Внутренняя ошибка сервера")
 		}
 	}()
-	router.dispatch(writer, request)
-}
-
-func (router *Router) dispatch(writer http.ResponseWriter, request *http.Request) {
-	handler, pattern := router.mux.Handler(request)
-	if pattern == "" {
-		if router.matchesAnyMethod(request) {
-			writeError(writer, request, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Метод не поддерживается для этого маршрута")
-			return
-		}
-		writeError(writer, request, http.StatusNotFound, "NOT_FOUND", "Маршрут не найден")
-		return
-	}
-	handler.ServeHTTP(writer, request)
-}
-
-func (router *Router) matchesAnyMethod(request *http.Request) bool {
-	for _, method := range []string{
-		http.MethodGet,
-		http.MethodHead,
-		http.MethodPost,
-		http.MethodPut,
-		http.MethodPatch,
-		http.MethodDelete,
-		http.MethodConnect,
-		http.MethodOptions,
-	} {
-		candidate := request.Clone(request.Context())
-		candidate.Method = method
-		if _, pattern := router.mux.Handler(candidate); pattern != "" {
-			return true
-		}
-	}
-	return false
+	router.mux.ServeHTTP(writer, request)
 }
 
 func requestID(next http.Handler) http.Handler {
@@ -122,6 +89,8 @@ type loggingResponseWriter struct {
 	status      int
 	bytes       int
 	wroteHeader bool
+	request     *http.Request
+	replaced    bool
 }
 
 func (writer *loggingResponseWriter) WriteHeader(status int) {
@@ -130,10 +99,23 @@ func (writer *loggingResponseWriter) WriteHeader(status int) {
 	}
 	writer.wroteHeader = true
 	writer.status = status
+	if writer.request.Pattern == "" {
+		switch status {
+		case http.StatusNotFound:
+			writer.writeRouteError("NOT_FOUND", "Маршрут не найден")
+			return
+		case http.StatusMethodNotAllowed:
+			writer.writeRouteError("METHOD_NOT_ALLOWED", "Метод не поддерживается для этого маршрута")
+			return
+		}
+	}
 	writer.ResponseWriter.WriteHeader(status)
 }
 
 func (writer *loggingResponseWriter) Write(body []byte) (int, error) {
+	if writer.replaced {
+		return len(body), nil
+	}
 	if !writer.wroteHeader {
 		writer.wroteHeader = true
 	}
@@ -142,10 +124,34 @@ func (writer *loggingResponseWriter) Write(body []byte) (int, error) {
 	return bytes, err
 }
 
+func (writer *loggingResponseWriter) Unwrap() http.ResponseWriter {
+	return writer.ResponseWriter
+}
+
+func (writer *loggingResponseWriter) Flush() {
+	if !writer.wroteHeader {
+		writer.wroteHeader = true
+	}
+	_ = http.NewResponseController(writer.ResponseWriter).Flush()
+}
+
+func (writer *loggingResponseWriter) writeRouteError(code, message string) {
+	writer.replaced = true
+	writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	writer.ResponseWriter.WriteHeader(writer.status)
+	body, err := json.Marshal(errorEnvelope(writer.request, code, message))
+	if err != nil {
+		return
+	}
+	body = append(body, '\n')
+	written, _ := writer.ResponseWriter.Write(body)
+	writer.bytes += written
+}
+
 func accessLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		started := time.Now()
-		recorded := &loggingResponseWriter{ResponseWriter: writer, status: http.StatusOK}
+		recorded := &loggingResponseWriter{ResponseWriter: writer, status: http.StatusOK, request: request}
 		next.ServeHTTP(recorded, request)
 		slog.Info(
 			"http request",
@@ -213,11 +219,15 @@ func notFound(writer http.ResponseWriter, request *http.Request) {
 }
 
 func writeError(writer http.ResponseWriter, request *http.Request, status int, code, message string) {
-	writeJSON(writer, status, map[string]map[string]string{"error": {
+	writeJSON(writer, status, errorEnvelope(request, code, message))
+}
+
+func errorEnvelope(request *http.Request, code, message string) map[string]map[string]string {
+	return map[string]map[string]string{"error": {
 		"code":       code,
 		"message":    message,
 		"request_id": RequestID(request.Context()),
-	}})
+	}}
 }
 
 func writeJSON(writer http.ResponseWriter, status int, body any) {
