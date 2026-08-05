@@ -25,6 +25,7 @@ type Router struct {
 type contextKey string
 
 const demoUserIDKey contextKey = "demo-user-id"
+const readinessTimeout = 2 * time.Second
 
 func NewRouter(checker Checker, demoEnabled bool) *Router {
 	router := &Router{mux: http.NewServeMux(), demoEnabled: demoEnabled}
@@ -186,7 +187,9 @@ func healthHandler(writer http.ResponseWriter, _ *http.Request) {
 
 func readyHandler(checker Checker) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		if checker == nil || checker.Check(request.Context()) != nil {
+		ctx, cancel := context.WithTimeout(request.Context(), readinessTimeout)
+		defer cancel()
+		if checker == nil || checker.Check(ctx) != nil {
 			writeError(writer, request, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Сервис временно недоступен")
 			return
 		}

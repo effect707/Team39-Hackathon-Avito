@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	postgresmigration "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -41,7 +43,9 @@ func run(args []string) error {
 	case "version":
 		return version(db)
 	case "seed":
-		_, err := db.Exec(string(migrationfiles.SeedSQL))
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_, err := db.ExecContext(ctx, string(migrationfiles.SeedSQL))
 		return err
 	default:
 		return fmt.Errorf("usage: migrate <up|version|seed>")

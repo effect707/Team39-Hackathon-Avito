@@ -27,8 +27,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /api/v1/ready:
     get:
       tags: [System]
@@ -43,8 +41,6 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /api/v1/products:
     get:
       tags: [Products]
@@ -293,7 +289,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
           example:
             error:
               code: NOT_IMPLEMENTED
@@ -304,49 +300,49 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
     Unauthorized:
       description: Demo-идентичность отсутствует или недействительна.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
     ProductNotFound:
       description: Товар не найден.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
     QueueEntryNotFound:
       description: Заявка пользователя на этот товар не найдена.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
     QueueConflict:
       description: Операция очереди невозможна в текущем состоянии.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
     GrantNotFound:
       description: Право не найдено или недоступно этому пользователю.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
     GrantConflict:
       description: Право истекло, использовано или находится в недопустимом состоянии.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
     ServiceUnavailable:
       description: API запущен, но зависимость пока не готова.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
     HealthResponse:
       type: object
@@ -540,7 +536,7 @@ components:
         occurred_at:
           type: string
           format: date-time
-    ErrorResponse:
+    ErrorEnvelope:
       type: object
       additionalProperties: false
       required: [error]
@@ -558,6 +554,9 @@ components:
             - NOT_IMPLEMENTED
             - INVALID_REQUEST
             - UNAUTHORIZED
+            - NOT_FOUND
+            - METHOD_NOT_ALLOWED
+            - INTERNAL
             - PRODUCT_NOT_FOUND
             - QUEUE_REQUIRED
             - ENTRY_ALREADY_ACTIVE

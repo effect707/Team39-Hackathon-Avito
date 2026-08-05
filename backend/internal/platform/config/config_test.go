@@ -35,3 +35,16 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 		t.Fatal("Load() error = nil, want validation error")
 	}
 }
+
+func TestLoadDisablesDemoMiddleware(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://queue:queue@localhost:5432/queue?sslmode=disable")
+	t.Setenv("DEMO_MODE", "false")
+
+	got, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.DemoEnabled {
+		t.Fatal("DemoEnabled = true, want false")
+	}
+}

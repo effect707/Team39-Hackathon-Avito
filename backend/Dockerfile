@@ -10,6 +10,7 @@ RUN CGO_ENABLED=0 go build -o /out/migrate ./cmd/migrate
 
 FROM gcr.io/distroless/static-debian12:nonroot
 
+LABEL org.opencontainers.image.source="https://github.com/effect707/Team39-Hackathon-Avito"
 COPY --from=build /out/api /api
 COPY --from=build /out/worker /worker
 COPY --from=build /out/migrate /migrate

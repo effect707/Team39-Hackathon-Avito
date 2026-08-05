@@ -30,7 +30,7 @@ func Load() (Config, error) {
 	}
 
 	var err error
-	if config.DemoEnabled, err = boolFromEnv("DEMO_ENABLED", config.DemoEnabled); err != nil {
+	if config.DemoEnabled, err = boolFromEnv("DEMO_MODE", config.DemoEnabled); err != nil {
 		return Config{}, err
 	}
 	if config.WorkerInterval, err = durationFromEnv("WORKER_INTERVAL", config.WorkerInterval); err != nil {
