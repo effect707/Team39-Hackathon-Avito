@@ -67,6 +67,27 @@ ok      github.com/team39/avito-fair-queue/backend/internal/platform/httpapi    
 ok      github.com/team39/avito-fair-queue/backend/internal/platform/worker     (cached)
 ```
 
+### HTTP middleware hardening — RED then GREEN
+
+RED observations before this fix:
+
+- with `DEMO_ENABLED=false`, a business route without `X-Demo-User-ID` returned `401` instead of its `501 NOT_IMPLEMENTED` stub response;
+- router-generated `404` and `405` responses were plaintext rather than the JSON error envelope;
+- the access-log test found `0` structured `http request` entries.
+
+GREEN after the fix:
+
+```text
+$ cd backend && env GOTOOLCHAIN=go1.26.4 go test -timeout 60s ./internal/platform/httpapi
+ok      github.com/team39/avito-fair-queue/backend/internal/platform/httpapi    0.565s
+
+$ env GOTOOLCHAIN=go1.26.4 go test -race -timeout 60s ./...
+PASS (controller verification, 2.8s)
+
+$ cd backend && env GOTOOLCHAIN=go1.26.4 go vet ./... && env GOTOOLCHAIN=go1.26.4 go build ./cmd/api ./cmd/worker ./cmd/migrate
+PASS
+```
+
 ## Final verification
 
 Command:

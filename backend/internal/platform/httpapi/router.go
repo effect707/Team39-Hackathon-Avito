@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -17,7 +18,8 @@ type Checker interface {
 }
 
 type Router struct {
-	mux *http.ServeMux
+	mux         *http.ServeMux
+	demoEnabled bool
 }
 
 type contextKey string
@@ -25,7 +27,7 @@ type contextKey string
 const demoUserIDKey contextKey = "demo-user-id"
 
 func NewRouter(checker Checker, demoEnabled bool) *Router {
-	router := &Router{mux: http.NewServeMux()}
+	router := &Router{mux: http.NewServeMux(), demoEnabled: demoEnabled}
 	router.Handle("GET /api/v1/health", healthHandler)
 	router.Handle("GET /api/v1/ready", readyHandler(checker))
 	router.mux.Handle("GET /metrics", promhttp.Handler())
@@ -50,11 +52,15 @@ func (router *Router) Handle(pattern string, handler http.HandlerFunc) {
 }
 
 func (router *Router) HandleDemo(pattern string, handler http.HandlerFunc) {
-	router.mux.Handle(pattern, demoAuth(handler))
+	if router.demoEnabled {
+		router.mux.Handle(pattern, demoAuth(handler))
+		return
+	}
+	router.mux.HandleFunc(pattern, handler)
 }
 
 func (router *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	requestID(http.HandlerFunc(router.recoverPanic)).ServeHTTP(writer, request)
+	accessLog(requestID(http.HandlerFunc(router.recoverPanic))).ServeHTTP(writer, request)
 }
 
 func (router *Router) recoverPanic(writer http.ResponseWriter, request *http.Request) {
@@ -64,7 +70,40 @@ func (router *Router) recoverPanic(writer http.ResponseWriter, request *http.Req
 			writeError(writer, request, http.StatusInternalServerError, "INTERNAL", "Внутренняя ошибка сервера")
 		}
 	}()
-	router.mux.ServeHTTP(writer, request)
+	router.dispatch(writer, request)
+}
+
+func (router *Router) dispatch(writer http.ResponseWriter, request *http.Request) {
+	handler, pattern := router.mux.Handler(request)
+	if pattern == "" {
+		if router.matchesAnyMethod(request) {
+			writeError(writer, request, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Метод не поддерживается для этого маршрута")
+			return
+		}
+		writeError(writer, request, http.StatusNotFound, "NOT_FOUND", "Маршрут не найден")
+		return
+	}
+	handler.ServeHTTP(writer, request)
+}
+
+func (router *Router) matchesAnyMethod(request *http.Request) bool {
+	for _, method := range []string{
+		http.MethodGet,
+		http.MethodHead,
+		http.MethodPost,
+		http.MethodPut,
+		http.MethodPatch,
+		http.MethodDelete,
+		http.MethodConnect,
+		http.MethodOptions,
+	} {
+		candidate := request.Clone(request.Context())
+		candidate.Method = method
+		if _, pattern := router.mux.Handler(candidate); pattern != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func requestID(next http.Handler) http.Handler {
@@ -75,6 +114,48 @@ func requestID(next http.Handler) http.Handler {
 		}
 		writer.Header().Set("X-Request-ID", requestID)
 		next.ServeHTTP(writer, request.WithContext(context.WithValue(request.Context(), requestIDKey, requestID)))
+	})
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	status      int
+	bytes       int
+	wroteHeader bool
+}
+
+func (writer *loggingResponseWriter) WriteHeader(status int) {
+	if writer.wroteHeader {
+		return
+	}
+	writer.wroteHeader = true
+	writer.status = status
+	writer.ResponseWriter.WriteHeader(status)
+}
+
+func (writer *loggingResponseWriter) Write(body []byte) (int, error) {
+	if !writer.wroteHeader {
+		writer.wroteHeader = true
+	}
+	bytes, err := writer.ResponseWriter.Write(body)
+	writer.bytes += bytes
+	return bytes, err
+}
+
+func accessLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		started := time.Now()
+		recorded := &loggingResponseWriter{ResponseWriter: writer, status: http.StatusOK}
+		next.ServeHTTP(recorded, request)
+		slog.Info(
+			"http request",
+			"request_id", recorded.Header().Get("X-Request-ID"),
+			"method", request.Method,
+			"path", request.URL.Path,
+			"status", recorded.status,
+			"duration", time.Since(started),
+			"bytes", recorded.bytes,
+		)
 	})
 }
 

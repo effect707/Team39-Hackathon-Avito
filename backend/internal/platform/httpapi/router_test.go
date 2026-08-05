@@ -1,10 +1,14 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -161,4 +165,166 @@ func TestMetricsIsAvailableAtInternalMetricsPath(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/plain") {
 		t.Errorf("Content-Type = %q, want Prometheus text format", got)
 	}
+}
+
+func TestBusinessRoutesDoNotRequireDemoIdentityWhenDemoIsDisabled(t *testing.T) {
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), false)
+	t.Run("business route bypasses demo middleware", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/join", nil))
+		if rec.Code != http.StatusNotImplemented {
+			t.Errorf("status = %d, want 501 when demo middleware is disabled", rec.Code)
+		}
+	})
+
+	t.Run("demo payment endpoint remains unavailable", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/demo/grants/50000000-0000-4000-8000-000000000001/payment-result", nil))
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want 404", rec.Code)
+		}
+		if got := rec.Body.String(); !strings.Contains(got, "\"code\":\"NOT_FOUND\"") {
+			t.Errorf("body = %q, want JSON not-found envelope", got)
+		}
+	})
+}
+
+func TestRouterReturnsJSONErrorEnvelopeForUnknownPathAndMethod(t *testing.T) {
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	cases := []struct {
+		name   string
+		method string
+		path   string
+		status int
+		code   string
+	}{
+		{"unknown path", http.MethodGet, "/api/v1/not-a-route", http.StatusNotFound, "NOT_FOUND"},
+		{"wrong method", http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.Header.Set("X-Request-ID", "route-error-123")
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != tc.status {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.status)
+			}
+			want := "{\"error\":{\"code\":\"" + tc.code + "\",\"message\":"
+			if got := rec.Body.String(); !strings.HasPrefix(got, want) || !strings.Contains(got, "\"request_id\":\"route-error-123\"") {
+				t.Errorf("body = %q, want JSON ErrorEnvelope with request ID", got)
+			}
+		})
+	}
+}
+
+func TestRouterWritesStructuredAccessLogForEveryOutcome(t *testing.T) {
+	var output bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router.Handle("GET /panic-for-access-log", func(http.ResponseWriter, *http.Request) { panic("boom") })
+	requests := []struct {
+		method string
+		path   string
+		status int
+		demo   bool
+	}{
+		{http.MethodGet, "/api/v1/health", http.StatusOK, false},
+		{http.MethodPost, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/join", http.StatusUnauthorized, false},
+		{http.MethodGet, "/missing", http.StatusNotFound, false},
+		{http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, false},
+		{http.MethodPost, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/join", http.StatusNotImplemented, true},
+		{http.MethodGet, "/panic-for-access-log", http.StatusInternalServerError, false},
+	}
+
+	for index, tc := range requests {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		req.Header.Set("X-Request-ID", "access-"+strconv.Itoa(index))
+		if tc.demo {
+			req.Header.Set("X-Demo-User-ID", "40000000-0000-4000-8000-000000000001")
+		}
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != tc.status {
+			t.Errorf("request %d status = %d, want %d", index, rec.Code, tc.status)
+		}
+	}
+
+	if strings.Contains(output.String(), "40000000-0000-4000-8000-000000000001") {
+		t.Fatal("access log contains demo user data")
+	}
+	entries := accessLogEntries(t, output.String())
+	if len(entries) != len(requests) {
+		t.Fatalf("access log entries = %d, want %d; output = %s", len(entries), len(requests), output.String())
+	}
+	for index, entry := range entries {
+		if got := entry["request_id"]; got != "access-"+strconv.Itoa(index) {
+			t.Errorf("entry %d request_id = %v", index, got)
+		}
+		if got := entry["method"]; got != requests[index].method {
+			t.Errorf("entry %d method = %v, want %s", index, got, requests[index].method)
+		}
+		if got := entry["path"]; got != requests[index].path {
+			t.Errorf("entry %d path = %v, want %s", index, got, requests[index].path)
+		}
+		if got := entry["status"]; got != float64(requests[index].status) {
+			t.Errorf("entry %d status = %v, want %d", index, got, requests[index].status)
+		}
+		if _, ok := entry["duration"]; !ok {
+			t.Errorf("entry %d has no duration", index)
+		}
+		if got, ok := entry["bytes"].(float64); !ok || got <= 0 {
+			t.Errorf("entry %d bytes = %v, want positive", index, entry["bytes"])
+		}
+	}
+}
+
+func TestRouterAccessLogRecordsFirstResponseStatus(t *testing.T) {
+	var output bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router.Handle("GET /first-response-status", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusCreated)
+		writer.WriteHeader(http.StatusInternalServerError)
+	})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/first-response-status", nil))
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("response status = %d, want %d", recorder.Code, http.StatusCreated)
+	}
+	entries := accessLogEntries(t, output.String())
+	if len(entries) != 1 {
+		t.Fatalf("access log entries = %d, want 1; output = %s", len(entries), output.String())
+	}
+	if got := entries[0]["status"]; got != float64(http.StatusCreated) {
+		t.Errorf("access log status = %v, want %d", got, http.StatusCreated)
+	}
+}
+
+func accessLogEntries(t *testing.T, output string) []map[string]any {
+	t.Helper()
+	var entries []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		var entry map[string]any
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("unmarshal access log entry: %v", err)
+		}
+		if entry["msg"] == "http request" {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
 }
