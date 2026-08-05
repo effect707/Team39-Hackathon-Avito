@@ -96,6 +96,25 @@ ok      github.com/team39/avito-fair-queue/backend/internal/platform/worker     
 nonroot:nonroot ["/api"]
 ```
 
+### Embedded migration and seed smoke test
+
+An isolated `postgres:17-alpine` container was started at `127.0.0.1:55432`, then the embedded command was exercised with a quoted `DATABASE_URL`:
+
+```text
+$ env GOTOOLCHAIN=go1.26.4 DATABASE_URL='postgres://queue:queue@127.0.0.1:55432/queue?sslmode=disable' go run ./cmd/migrate up
+$ env GOTOOLCHAIN=go1.26.4 DATABASE_URL='postgres://queue:queue@127.0.0.1:55432/queue?sslmode=disable' go run ./cmd/migrate version
+version: 1 dirty: false
+$ env GOTOOLCHAIN=go1.26.4 DATABASE_URL='postgres://queue:queue@127.0.0.1:55432/queue?sslmode=disable' go run ./cmd/migrate seed
+$ env GOTOOLCHAIN=go1.26.4 DATABASE_URL='postgres://queue:queue@127.0.0.1:55432/queue?sslmode=disable' go run ./cmd/migrate seed
+$ docker exec avito-task2-migrate-test psql -U queue -d queue -c "SELECT (SELECT count(*) FROM products) AS products, (SELECT count(*) FROM inventory_units) AS inventory_units;"
+ products | inventory_units
+----------+-----------------
+        5 |               9
+(1 row)
+```
+
+The temporary container was stopped and auto-removed after the check.
+
 ## Self-review
 
 - No `AutoMigrate`, process-memory state, or SQL schema change was introduced.
@@ -104,6 +123,6 @@ nonroot:nonroot ["/api"]
 - The API and worker share config/database packages; worker work is cancellable.
 - The migration command uses `golang-migrate/migrate/v4` with `io/fs`-embedded migration and seed SQL. Seed SQL is the existing idempotent script.
 
-## Concern
+## Concerns
 
-The attempted isolated PostgreSQL end-to-end `migrate up` smoke test did not execute: zsh treated the unquoted `?` in `DATABASE_URL=...?...` as a glob and returned `zsh:1: no matches found`. The temporary PostgreSQL container was stopped and auto-removed. Compile/build and Docker-image checks passed, but `up`, `version`, and `seed` were not exercised against a live database in this task.
+None for the delivered Task 2 scope. The first smoke-test command had an unquoted URL and zsh rejected its `?` as a glob; the successful quoted PostgreSQL 17 smoke test above supersedes it.
