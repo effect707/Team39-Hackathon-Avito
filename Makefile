@@ -18,16 +18,17 @@ seed:
 	$(COMPOSE) run --rm migrate seed
 
 fmt:
-	gofmt -w $$(rg --files backend -g '*.go')
+	find backend -type f -name '*.go' -exec gofmt -w {} +
 	cd frontend && npm run format
 
 fmt-check:
-	@test -z "$$(gofmt -l $$(rg --files backend -g '*.go'))" || { gofmt -l $$(rg --files backend -g '*.go'); exit 1; }
+	@unformatted="$$(find backend -type f -name '*.go' -exec gofmt -l {} +)"; \
+		if [[ -n "$$unformatted" ]]; then printf '%s\n' "$$unformatted"; exit 1; fi
 	cd frontend && npm run format:check
 
 check-tools:
 	@command -v golangci-lint >/dev/null || { echo "golangci-lint $(GOLANGCI_LINT_VERSION) is required"; exit 1; }
-	@golangci-lint version | rg -q "version $(GOLANGCI_LINT_VERSION)" || { golangci-lint version; echo "golangci-lint $(GOLANGCI_LINT_VERSION) is required"; exit 1; }
+	@golangci-lint version | grep -Fq "version $(GOLANGCI_LINT_VERSION)" || { golangci-lint version; echo "golangci-lint $(GOLANGCI_LINT_VERSION) is required"; exit 1; }
 
 lint: lint-backend lint-frontend
 
