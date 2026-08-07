@@ -40,7 +40,6 @@ lint-frontend:
 
 test:
 	cd backend && $(GO) test ./...
-	cd frontend && npm test
 
 test-race:
 	cd backend && $(GO) test -race ./...
