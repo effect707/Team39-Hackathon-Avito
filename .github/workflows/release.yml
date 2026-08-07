@@ -1,0 +1,168 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout release
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag and main ancestry
+        run: |
+          git fetch origin main:refs/remotes/origin/main --no-tags
+          tools/check-release.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" refs/remotes/origin/main
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: 1.26.4
+          cache-dependency-path: backend/go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci --prefix frontend
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+
+      - name: Verify release source
+        run: make verify
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout release
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish backend image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: backend
+          file: backend/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/effect707/team39-hackathon-avito-backend:${{ github.ref_name }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Publish frontend image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/effect707/team39-hackathon-avito-frontend:${{ github.ref_name }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    environment: production
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    steps:
+      - name: Checkout deployment files
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Prepare SSH
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 0700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Prepare deployment bundle
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        run: |
+          if [[ ! "$POSTGRES_PASSWORD" =~ ^[A-Za-z0-9_-]{24,128}$ ]]; then
+            echo 'POSTGRES_PASSWORD must contain 24-128 URL-safe characters' >&2
+            exit 1
+          fi
+          tar -czf deploy-bundle.tgz docker-compose.prod.yml deploy/nginx/edge.conf deploy/scripts/deploy-server.sh
+          umask 077
+          printf '%s\n' \
+            'APP_PORT=80' \
+            'POSTGRES_DB=queue' \
+            'POSTGRES_USER=queue' \
+            "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
+            'DEMO_MODE=true' \
+            'WORKER_INTERVAL=30s' \
+            'DB_MAX_OPEN_CONNS=20' \
+            'DB_MAX_IDLE_CONNS=10' \
+            'DB_CONN_MAX_LIFETIME=5m' \
+            "IMAGE_TAG=$GITHUB_REF_NAME" > production.env
+
+      - name: Copy and deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: |
+          : "${DEPLOY_HOST:?DEPLOY_HOST is required}"
+          : "${DEPLOY_USER:?DEPLOY_USER is required}"
+          : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
+          if [[ ! "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+            echo 'DEPLOY_USER has an unsafe value' >&2
+            exit 1
+          fi
+          if [[ ! "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ || "$DEPLOY_PATH" == "/" ]]; then
+            echo 'DEPLOY_PATH must be a safe absolute non-root path' >&2
+            exit 1
+          fi
+          scp deploy-bundle.tgz production.env "$DEPLOY_USER@$DEPLOY_HOST:/tmp/"
+          printf '%s\n' "$GHCR_TOKEN" | ssh "$DEPLOY_USER@$DEPLOY_HOST" "set -Eeuo pipefail; read -r token; cleanup() { docker logout ghcr.io >/dev/null 2>&1 || true; rm -f /tmp/deploy-bundle.tgz /tmp/production.env; }; trap cleanup EXIT; printf '%s' \"\$token\" | docker login ghcr.io --username '$GHCR_USERNAME' --password-stdin >/dev/null; mkdir -p '$DEPLOY_PATH'; tar -xzf /tmp/deploy-bundle.tgz -C '$DEPLOY_PATH'; install -m 0600 /tmp/production.env '$DEPLOY_PATH/.env'; cd '$DEPLOY_PATH'; bash deploy/scripts/deploy-server.sh"

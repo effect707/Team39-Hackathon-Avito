@@ -1,0 +1,576 @@
+openapi: 3.1.0
+info:
+  title: Avito Fair Queue API
+  version: 1.0.0
+  description: >-
+    API MVP «Авито Честная очередь». Сервер принимает решения о FIFO,
+    резервировании и доступе к checkout. Пока walking-skeleton обработчики
+    не реализованы, маршруты возвращают 501 NOT_IMPLEMENTED.
+servers:
+  - url: /
+tags:
+  - name: System
+  - name: Products
+  - name: Queue
+  - name: Checkout
+  - name: Demo
+paths:
+  /api/v1/health:
+    get:
+      tags: [System]
+      summary: Проверить, что API запущен
+      operationId: getHealth
+      responses:
+        '200':
+          description: API запущен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/v1/ready:
+    get:
+      tags: [System]
+      summary: Проверить готовность API и его зависимостей
+      operationId: getReady
+      responses:
+        '200':
+          description: API и зависимости готовы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/products:
+    get:
+      tags: [Products]
+      summary: Получить каталог тестовых товаров
+      operationId: listProducts
+      responses:
+        '200':
+          description: Каталог получен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListResponse'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/products/{product_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProductId'
+    get:
+      tags: [Products]
+      summary: Получить карточку товара
+      operationId: getProduct
+      responses:
+        '200':
+          description: Карточка товара получена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          $ref: '#/components/responses/ProductNotFound'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/products/{product_id}/alternatives:
+    parameters:
+      - $ref: '#/components/parameters/ProductId'
+    get:
+      tags: [Products]
+      summary: Получить похожие активные объявления
+      operationId: listProductAlternatives
+      responses:
+        '200':
+          description: Альтернативные объявления получены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListResponse'
+        '404':
+          $ref: '#/components/responses/ProductNotFound'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/products/{product_id}/queue/join:
+    parameters:
+      - $ref: '#/components/parameters/ProductId'
+    post:
+      tags: [Queue]
+      summary: Идемпотентно войти в очередь
+      description: >-
+        Пользователь определяется только заголовком X-Demo-User-ID. Тело
+        запроса не содержит user_id.
+      operationId: joinQueue
+      security:
+        - DemoUser: []
+      responses:
+        '200':
+          description: Возвращена текущая или новая активная заявка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ProductNotFound'
+        '409':
+          $ref: '#/components/responses/QueueConflict'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/products/{product_id}/queue/me:
+    parameters:
+      - $ref: '#/components/parameters/ProductId'
+    get:
+      tags: [Queue]
+      summary: Получить актуальное состояние своей заявки
+      operationId: getMyQueueState
+      security:
+        - DemoUser: []
+      responses:
+        '200':
+          description: Состояние заявки получено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/QueueEntryNotFound'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    delete:
+      tags: [Queue]
+      summary: Выйти из очереди или отказаться от права
+      operationId: leaveQueue
+      security:
+        - DemoUser: []
+      responses:
+        '200':
+          description: Состояние заявки обновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/QueueEntryNotFound'
+        '409':
+          $ref: '#/components/responses/QueueConflict'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/products/{product_id}/queue/events:
+    parameters:
+      - $ref: '#/components/parameters/ProductId'
+    get:
+      tags: [Queue]
+      summary: Подписаться на SSE-сигналы об изменении очереди
+      description: >-
+        Сигнал не является источником истины. После каждого события клиент
+        повторно получает состояние через GET /queue/me.
+      operationId: streamQueueEvents
+      security:
+        - DemoUser: []
+      responses:
+        '200':
+          description: Поток Server-Sent Events
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-cache
+            X-Accel-Buffering:
+              schema:
+                type: string
+                example: 'no'
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/SSESignal'
+              examples:
+                queueChanged:
+                  summary: Сигнал, требующий REST-обновления
+                  value: |-
+                    event: queue.changed
+                    data: {"product_id":"10000000-0000-4000-8000-000000000001","queue_entry_id":"30000000-0000-4000-8000-000000000001","occurred_at":"2026-08-05T10:00:00Z"}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/grants/{grant_id}/checkout:
+    parameters:
+      - $ref: '#/components/parameters/GrantId'
+    post:
+      tags: [Checkout]
+      summary: Проверить право и начать checkout
+      description: >-
+        Пользователь определяется только заголовком X-Demo-User-ID. При
+        успехе право атомарно переходит в CHECKOUT_PENDING.
+      operationId: startCheckout
+      security:
+        - DemoUser: []
+      responses:
+        '200':
+          description: Checkout начат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutStartedResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/GrantNotFound'
+        '409':
+          $ref: '#/components/responses/GrantConflict'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/demo/grants/{grant_id}/payment-result:
+    parameters:
+      - $ref: '#/components/parameters/GrantId'
+    post:
+      tags: [Demo]
+      summary: Передать demo-результат mock Payment
+      description: >-
+        Доступно только в demo-режиме. Повтор с тем же idempotency_key
+        возвращает уже зафиксированный результат без нового эффекта.
+      operationId: submitDemoPaymentResult
+      security:
+        - DemoUser: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentResultRequest'
+      responses:
+        '200':
+          description: Результат оплаты обработан или уже был обработан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResultResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/GrantNotFound'
+        '409':
+          $ref: '#/components/responses/GrantConflict'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+components:
+  securitySchemes:
+    DemoUser:
+      type: apiKey
+      in: header
+      name: X-Demo-User-ID
+      description: Demo-идентичность пользователя; вне demo-режима не используется.
+  parameters:
+    ProductId:
+      name: product_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    GrantId:
+      name: grant_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    NotImplemented:
+      description: Маршрут объявлен в контракте, но ещё не реализован walking skeleton.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: NOT_IMPLEMENTED
+              message: Маршрут ещё не реализован
+              request_id: 018f1f15-0000-7000-8000-000000000001
+    InvalidRequest:
+      description: Некорректное тело или параметры запроса.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Unauthorized:
+      description: Demo-идентичность отсутствует или недействительна.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ProductNotFound:
+      description: Товар не найден.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    QueueEntryNotFound:
+      description: Заявка пользователя на этот товар не найдена.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    QueueConflict:
+      description: Операция очереди невозможна в текущем состоянии.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    GrantNotFound:
+      description: Право не найдено или недоступно этому пользователю.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    GrantConflict:
+      description: Право истекло, использовано или находится в недопустимом состоянии.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ServiceUnavailable:
+      description: API запущен, но зависимость пока не готова.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    Product:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - category
+        - price
+        - queue_enabled
+        - lifecycle_status
+        - inventory
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        category:
+          type: string
+        price:
+          type: string
+          pattern: '^\d+\.\d{2}$'
+          description: Цена в рублях в десятичной строке, чтобы не терять точность.
+          example: '59990.00'
+        image_url:
+          type: [string, 'null']
+          format: uri
+        queue_enabled:
+          type: boolean
+        lifecycle_status:
+          $ref: '#/components/schemas/ProductLifecycleStatus'
+        inventory:
+          $ref: '#/components/schemas/InventorySummary'
+    ProductListResponse:
+      type: object
+      additionalProperties: false
+      required: [products]
+      properties:
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+    InventorySummary:
+      type: object
+      additionalProperties: false
+      required: [available, reserved, sold]
+      properties:
+        available:
+          type: integer
+          minimum: 0
+        reserved:
+          type: integer
+          minimum: 0
+        sold:
+          type: integer
+          minimum: 0
+    ProductLifecycleStatus:
+      type: string
+      enum: [ACTIVE, SOLD_OUT, REMOVED]
+    QueueState:
+      type: object
+      additionalProperties: false
+      required:
+        - queue_entry_id
+        - product_id
+        - ticket_no
+        - status
+        - message
+        - next_action
+        - grant
+      properties:
+        queue_entry_id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        ticket_no:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/QueueEntryStatus'
+        position:
+          type: [integer, 'null']
+          minimum: 1
+          description: Позиция среди WAITING-заявок; не вычисляется клиентом.
+        message:
+          type: string
+          description: Русскоязычное объяснение текущего состояния.
+        next_action:
+          type: string
+          description: Русскоязычное действие, доступное пользователю.
+        grant:
+          anyOf:
+            - $ref: '#/components/schemas/Grant'
+            - type: 'null'
+    QueueEntryStatus:
+      type: string
+      enum:
+        - JOINING
+        - WAITING
+        - GRANTED
+        - CHECKOUT_PENDING
+        - PURCHASED
+        - EXPIRED
+        - PAYMENT_FAILED
+        - SOLD_OUT
+        - CANCELLED
+        - ERROR
+    Grant:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - product_id
+        - inventory_unit_id
+        - status
+        - expires_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        inventory_unit_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/GrantStatus'
+        expires_at:
+          type: string
+          format: date-time
+    GrantStatus:
+      type: string
+      enum: [ACTIVE, CHECKOUT_PENDING, PURCHASED, EXPIRED, FAILED, CANCELLED]
+    CheckoutStartedResponse:
+      type: object
+      additionalProperties: false
+      required: [grant]
+      properties:
+        grant:
+          $ref: '#/components/schemas/Grant'
+    PaymentResultRequest:
+      type: object
+      additionalProperties: false
+      required: [idempotency_key, result]
+      properties:
+        idempotency_key:
+          type: string
+          format: uuid
+        result:
+          type: string
+          enum: [success, failure, timeout]
+    PaymentResultResponse:
+      type: object
+      additionalProperties: false
+      required: [grant, idempotency_key, already_processed]
+      properties:
+        grant:
+          $ref: '#/components/schemas/Grant'
+        idempotency_key:
+          type: string
+          format: uuid
+        already_processed:
+          type: boolean
+    SSESignal:
+      type: object
+      additionalProperties: false
+      required: [type, product_id, queue_entry_id, occurred_at]
+      properties:
+        type:
+          type: string
+          enum: [queue.changed]
+        product_id:
+          type: string
+          format: uuid
+        queue_entry_id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+    ErrorBody:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id]
+      properties:
+        code:
+          type: string
+          enum:
+            - NOT_IMPLEMENTED
+            - INVALID_REQUEST
+            - UNAUTHORIZED
+            - NOT_FOUND
+            - METHOD_NOT_ALLOWED
+            - INTERNAL
+            - PRODUCT_NOT_FOUND
+            - QUEUE_REQUIRED
+            - ENTRY_ALREADY_ACTIVE
+            - QUEUE_ENTRY_NOT_FOUND
+            - GRANT_NOT_FOUND
+            - GRANT_FORBIDDEN
+            - GRANT_EXPIRED
+            - GRANT_ALREADY_USED
+            - PRODUCT_SOLD_OUT
+            - INVALID_STATE
+            - CONFLICT
+            - SERVICE_UNAVAILABLE
+        message:
+          type: string
+        request_id:
+          type: string
+          minLength: 1
