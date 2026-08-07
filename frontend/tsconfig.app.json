@@ -9,7 +9,7 @@
         "allowArbitraryExtensions": true,
         "skipLibCheck": true,
         "paths": {
-            "@/*": ["src/*"]
+            "@/*": ["./src/*"]
         },
         "moduleResolution": "bundler",
         "allowImportingTsExtensions": true,
