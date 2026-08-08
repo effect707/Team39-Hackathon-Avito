@@ -2,9 +2,13 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./app/App.tsx";
+import { AntdProvider } from "@/app/providers";
+import "@fontsource/inter";
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
-        <App />
+        <AntdProvider>
+            <App />
+        </AntdProvider>
     </StrictMode>,
 );

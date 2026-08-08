@@ -2,7 +2,6 @@ import { createBrowserRouter } from "react-router";
 import { routePaths } from "@/shared/config/routes";
 import { ItemDetailsPage } from "@/pages/item-details";
 import { NotFoundPage } from "@/pages/not-found";
-import { SingInPage } from "@/pages/sing-in";
 import { HomePage } from "@/pages/home";
 
 export const router = createBrowserRouter([
@@ -20,6 +19,6 @@ export const router = createBrowserRouter([
     },
     {
         path: routePaths["sing-in"],
-        element: <SingInPage />,
+        element: <HomePage />,
     },
 ]);
