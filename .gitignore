@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 
+.DS_Store
 # Backend build and test output
 backend/bin/
 backend/coverage.out
@@ -25,3 +26,5 @@ pgdata/
 
 # Agent working state
 .superpowers/
+
+frontend/.env

@@ -49,8 +49,8 @@
 ### Запуск и поставка
 
 - один репозиторий для frontend и backend;
-- Docker Compose;
-- Nginx перед frontend и двумя репликами API;
+- backend-only Docker Compose с двумя напрямую опубликованными API-репликами;
+- независимые build и deploy frontend под ответственностью frontend-разработчика;
 - отдельный Go worker для TTL;
 - README, `.env.example`, OpenAPI и воспроизводимый seed;
 - публичный Ubuntu-деплой.
@@ -85,7 +85,7 @@
 ├── frontend/
 │   ├── src/
 │   └── tests/
-├── deploy/nginx/
+├── deploy/
 └── tools/loadgen/
 ```
 
@@ -181,7 +181,7 @@ Mock payment callback должен иметь `idempotency_key`. `success` пр�
 - Demo-only endpoints защищаются конфигурацией и выключаются вне demo-режима.
 - SSE сообщает только о возможном изменении. После события frontend перечитывает REST-состояние.
 - Потеря SSE, reconnect или несколько одинаковых событий не должны влиять на очередь.
-- Nginx buffering для SSE должен быть отключён.
+- Go API отдаёт SSE напрямую; любой добавленный frontend-командой промежуточный слой не должен буферизовать поток.
 
 ## 10. Миграции и данные
 
@@ -208,7 +208,7 @@ Mock payment callback должен иметь `idempotency_key`. `success` пр�
 
 ### Backend 1 — Platform, DevOps, realtime и интеграция
 
-Основной владелец: `backend/internal/platform`, `backend/internal/events`, `backend/cmd/api`, `deploy`, `tools/loadgen`, Compose, Nginx, CI и серверный деплой.
+Основной владелец: `backend/internal/platform`, `backend/internal/events`, `backend/cmd/api`, `deploy`, `tools/loadgen`, backend Compose, CI и серверный backend-деплой.
 
 Зона ответственности:
 
@@ -216,7 +216,7 @@ Mock payment callback должен иметь `idempotency_key`. `success` пр�
 - demo-auth;
 - SSE и PostgreSQL `LISTEN/NOTIFY`;
 - health/readiness, логи, метрики;
-- Docker Compose, две API-реплики, Nginx и CI;
+- backend Compose, две напрямую опубликованные API-реплики и CI;
 - нагрузочный инструмент и сквозная сборка.
 
 ### Backend 2 — FIFO Queue Engine

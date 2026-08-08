@@ -10,6 +10,7 @@ import (
 
 type Config struct {
 	HTTPAddress       string
+	MetricsAddress    string
 	DatabaseURL       string
 	DemoEnabled       bool
 	WorkerInterval    time.Duration
@@ -21,6 +22,7 @@ type Config struct {
 func Load() (Config, error) {
 	config := Config{
 		HTTPAddress:       valueOrDefault("HTTP_ADDRESS", ":8080"),
+		MetricsAddress:    valueOrDefault("METRICS_ADDRESS", ":9090"),
 		DatabaseURL:       strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		DemoEnabled:       true,
 		WorkerInterval:    30 * time.Second,
@@ -51,6 +53,12 @@ func Load() (Config, error) {
 	}
 	if config.HTTPAddress == "" {
 		return Config{}, fmt.Errorf("HTTP_ADDRESS must not be empty")
+	}
+	if config.MetricsAddress == "" {
+		return Config{}, fmt.Errorf("METRICS_ADDRESS must not be empty")
+	}
+	if config.MetricsAddress == config.HTTPAddress {
+		return Config{}, fmt.Errorf("METRICS_ADDRESS must differ from HTTP_ADDRESS")
 	}
 	if config.WorkerInterval <= 0 {
 		return Config{}, fmt.Errorf("WORKER_INTERVAL must be positive")

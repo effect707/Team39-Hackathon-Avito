@@ -32,6 +32,13 @@ func run() error {
 		return err
 	}
 	defer func() { _ = database.Close(db) }()
-	slog.Info("api started", "address", config.HTTPAddress)
-	return server.Run(ctx, config.HTTPAddress, httpapi.NewRouter(database.Checker{DB: db}, config.DemoEnabled))
+	slog.Info("api started", "http_address", config.HTTPAddress, "metrics_address", config.MetricsAddress)
+	return server.RunAll(
+		ctx,
+		server.Endpoint{
+			Address: config.HTTPAddress,
+			Handler: httpapi.NewRouter(database.Checker{DB: db}, config.DemoEnabled),
+		},
+		server.Endpoint{Address: config.MetricsAddress, Handler: httpapi.NewMetricsHandler()},
+	)
 }
