@@ -16,6 +16,9 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 	if got.HTTPAddress != ":8080" {
 		t.Errorf("HTTPAddress = %q, want :8080", got.HTTPAddress)
 	}
+	if got.MetricsAddress != ":9090" {
+		t.Errorf("MetricsAddress = %q, want :9090", got.MetricsAddress)
+	}
 	if !got.DemoEnabled {
 		t.Error("DemoEnabled = false, want true")
 	}
@@ -33,6 +36,16 @@ func TestLoadRejectsInvalidConfiguration(t *testing.T) {
 
 	if _, err := Load(); err == nil {
 		t.Fatal("Load() error = nil, want validation error")
+	}
+}
+
+func TestLoadRejectsSharedHTTPAndMetricsAddress(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://queue:queue@localhost:5432/queue?sslmode=disable")
+	t.Setenv("HTTP_ADDRESS", ":8080")
+	t.Setenv("METRICS_ADDRESS", ":8080")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want distinct listener validation error")
 	}
 }
 

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Checker interface {
@@ -31,7 +30,6 @@ func NewRouter(checker Checker, demoEnabled bool) *Router {
 	router := &Router{mux: http.NewServeMux(), demoEnabled: demoEnabled}
 	router.Handle("GET /api/v1/health", healthHandler)
 	router.Handle("GET /api/v1/ready", readyHandler(checker))
-	router.mux.Handle("GET /metrics", promhttp.Handler())
 	router.Handle("GET /api/v1/products", notImplemented)
 	router.Handle("GET /api/v1/products/{product_id}", notImplemented)
 	router.Handle("GET /api/v1/products/{product_id}/alternatives", notImplemented)

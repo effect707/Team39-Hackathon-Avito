@@ -180,17 +180,36 @@ func TestAllDeclaredDomainStubsReturnNotImplementedForAuthenticatedUser(t *testi
 	}
 }
 
-func TestMetricsIsAvailableAtInternalMetricsPath(t *testing.T) {
+func TestPublicRouterDoesNotExposeMetrics(t *testing.T) {
 	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil))
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
 	}
-	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/plain") {
+	if got := rec.Body.String(); !strings.Contains(got, `"code":"NOT_FOUND"`) {
+		t.Errorf("body = %q, want JSON not-found error envelope", got)
+	}
+}
+
+func TestMetricsHandlerServesPrometheusMetrics(t *testing.T) {
+	recorder := httptest.NewRecorder()
+
+	NewMetricsHandler().ServeHTTP(
+		recorder,
+		httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil),
+	)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", recorder.Code)
+	}
+	if got := recorder.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/plain") {
 		t.Errorf("Content-Type = %q, want Prometheus text format", got)
+	}
+	if got := recorder.Body.String(); !strings.Contains(got, "# HELP go_gc_duration_seconds") {
+		t.Errorf("body does not contain Go runtime metrics")
 	}
 }
 

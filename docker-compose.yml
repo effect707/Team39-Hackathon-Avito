@@ -1,6 +1,7 @@
 x-backend-environment: &backend-environment
   DATABASE_URL: postgres://${POSTGRES_USER:-queue}:${POSTGRES_PASSWORD:-queue_dev_password}@postgres:5432/${POSTGRES_DB:-queue}?sslmode=disable
   HTTP_ADDRESS: :8080
+  METRICS_ADDRESS: "${METRICS_ADDRESS:-:9090}"
   DEMO_MODE: ${DEMO_MODE:-true}
   WORKER_INTERVAL: ${WORKER_INTERVAL:-30s}
   DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-20}
@@ -54,36 +55,18 @@ services:
   api-1:
     <<: *backend-service
     entrypoint: ["/api"]
+    ports:
+      - "${API_1_PORT:-8080}:8080"
 
   api-2:
     <<: *backend-service
     entrypoint: ["/api"]
+    ports:
+      - "${API_2_PORT:-8081}:8080"
 
   worker:
     <<: *backend-service
     entrypoint: ["/worker"]
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    networks:
-      - application
-    restart: unless-stopped
-
-  nginx:
-    image: nginx:1.27-alpine
-    depends_on:
-      - api-1
-      - api-2
-      - frontend
-    ports:
-      - "${APP_PORT:-8080}:8080"
-    volumes:
-      - ./deploy/nginx/edge.conf:/etc/nginx/conf.d/default.conf:ro
-    networks:
-      - application
-    restart: unless-stopped
 
 volumes:
   postgres-data:

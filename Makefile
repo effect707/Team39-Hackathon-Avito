@@ -9,7 +9,7 @@ COMPOSE := docker compose
 .PHONY: up down seed fmt fmt-check lint lint-backend lint-frontend test test-race test-integration build validate smoke logs verify check-tools
 
 up:
-	$(COMPOSE) up --build -d
+	$(COMPOSE) up --build -d --remove-orphans
 
 down:
 	$(COMPOSE) down --remove-orphans
@@ -55,7 +55,6 @@ validate:
 	ruby tools/validate-openapi-examples.rb
 	$(COMPOSE) config -q
 	POSTGRES_PASSWORD=verify IMAGE_TAG=v0.0.0 $(COMPOSE) -f docker-compose.prod.yml config -q
-	docker run --rm --add-host api-1:127.0.0.1 --add-host api-2:127.0.0.1 --add-host frontend:127.0.0.1 -v "$(CURDIR)/deploy/nginx/edge.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine nginx -t
 	tools/check-release.sh v0.0.0 HEAD HEAD
 	@if tools/check-release.sh v0.0 HEAD HEAD >/dev/null 2>&1; then exit 1; fi
 	@if tools/check-release.sh v0.0.0 HEAD $$(git rev-list --max-parents=0 HEAD) >/dev/null 2>&1; then exit 1; fi
