@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getEstimatedWait } from "./getEstimatedWait";
+import { getEstimatedWait } from "@/entities/queue";
 
 describe("getEstimatedWait", () => {
     it.each([

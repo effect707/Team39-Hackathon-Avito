@@ -136,7 +136,7 @@ export const AuthModal = ({ onSignedIn }: { onSignedIn: (user: SessionUser) => v
                         </Form.Item>
                     )}
                     {submitState.status === "error" && (
-                        <Alert type="error" showIcon message={submitState.message} />
+                        <Alert type="error" showIcon title={submitState.message} />
                     )}
                     <Button
                         className={styles.submit}
