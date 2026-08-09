@@ -6,7 +6,8 @@ info:
     API MVP «Авито Честная очередь». Сервер принимает решения о FIFO,
     резервировании и доступе к checkout на основе PostgreSQL.
 servers:
-  - url: /
+  - url: http://localhost:8080
+    description: Local Dev Server
 tags:
   - name: System
   - name: Products
