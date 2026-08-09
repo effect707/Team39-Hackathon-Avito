@@ -40,6 +40,14 @@ func (checker Checker) Check(ctx context.Context) error {
 	return checker.DB.WithContext(ctx).Exec("SELECT 1").Error
 }
 
+func Now(tx *gorm.DB) (time.Time, error) {
+	var now time.Time
+	if err := tx.Raw("SELECT now()").Scan(&now).Error; err != nil {
+		return time.Time{}, fmt.Errorf("read database time: %w", err)
+	}
+	return now, nil
+}
+
 func Close(db *gorm.DB) error {
 	sqlDB, err := db.DB()
 	if err != nil {
