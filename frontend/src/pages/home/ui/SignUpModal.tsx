@@ -13,11 +13,7 @@ export const SignUpModal = ({ open }: SignUpModalProps) => {
     };
 
     return (
-        <Modal
-            open={open}
-            onCancel={handleClose}
-            footer={null}
-        >
+        <Modal open={open} onCancel={handleClose} footer={null}>
             <h2>Регистрация</h2>
 
             {/* форма */}

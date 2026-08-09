@@ -1,0 +1,36 @@
+.footer {
+    width: 100%;
+    background-color: #f7f7f5;
+}
+
+.content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 38px 20px 40px;
+}
+
+.links {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    margin-bottom: 14px;
+}
+
+.link {
+    color: #292929;
+    font-size: 14px;
+    line-height: 20px;
+    text-decoration: none;
+}
+
+.link:hover {
+    color: #ff4053;
+}
+
+.copyright {
+    margin-bottom: 18px;
+    color: #858585;
+    font-size: 12px;
+    line-height: 16px;
+}

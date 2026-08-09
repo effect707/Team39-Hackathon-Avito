@@ -2,13 +2,17 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./app/App.tsx";
-import { AntdProvider } from "@/app/providers";
+import { AppProviders } from "@/app/providers";
+import { configureMockApi } from "@mocks/configureMockApi";
 import "@fontsource/inter";
+import "@fontsource-variable/roboto/wght.css";
+
+configureMockApi();
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
-        <AntdProvider>
+        <AppProviders>
             <App />
-        </AntdProvider>
+        </AppProviders>
     </StrictMode>,
 );

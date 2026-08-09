@@ -1,3 +1,8 @@
-export { AppRoute, routePaths, getItemDetailsPath } from "./routes";
-
-export type { AppRoute as AppRouteType } from "./routes";
+export {
+    getAuthClosePath,
+    getAuthPath,
+    getCheckoutPath,
+    getItemDetailsPath,
+    routePaths,
+} from "./routes";
+export type { AuthMode } from "./routes";

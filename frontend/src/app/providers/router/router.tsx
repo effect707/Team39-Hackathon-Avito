@@ -1,24 +1,41 @@
 import { createBrowserRouter } from "react-router";
-import { routePaths } from "@/shared/config/routes";
+import { Layout } from "@/app/layout";
+import { ErrorPage } from "@/pages/error";
+import { HomePage } from "@/pages/home";
 import { ItemDetailsPage } from "@/pages/item-details";
 import { NotFoundPage } from "@/pages/not-found";
-import { HomePage } from "@/pages/home";
+import { OrderPage } from "@/pages/order";
+import { routePaths } from "@/shared/config/routes";
 
 export const router = createBrowserRouter([
     {
-        path: routePaths.home,
-        element: <HomePage />,
-    },
-    {
-        path: routePaths["item-details"],
-        element: <ItemDetailsPage />,
-    },
-    {
-        path: routePaths["not-found"],
-        element: <NotFoundPage />,
-    },
-    {
-        path: routePaths["sing-in"],
-        element: <HomePage />,
+        element: <Layout />,
+        errorElement: <ErrorPage />,
+        children: [
+            {
+                path: routePaths.home,
+                element: <HomePage />,
+            },
+            {
+                path: routePaths.itemDetails,
+                element: <ItemDetailsPage />,
+            },
+            {
+                path: routePaths.checkout,
+                element: <OrderPage />,
+            },
+            {
+                path: routePaths.signIn,
+                element: <HomePage />,
+            },
+            {
+                path: routePaths.signUp,
+                element: <HomePage />,
+            },
+            {
+                path: routePaths.notFound,
+                element: <NotFoundPage />,
+            },
+        ],
     },
 ]);

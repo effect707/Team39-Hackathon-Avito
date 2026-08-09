@@ -1,0 +1,36 @@
+.modal :global(.ant-modal-content),
+.result :global(.ant-modal-content) {
+    padding: 38px;
+    border-radius: 28px;
+}
+.badge {
+    display: inline-flex;
+    padding: 7px 11px;
+    border-radius: 9px;
+    color: #6d3db7;
+    background: #efe7fc;
+    font-weight: 650;
+}
+.title {
+    margin: 20px 0 10px;
+    font-size: 32px;
+    line-height: 1.1;
+}
+.copy {
+    color: #666;
+    line-height: 1.45;
+}
+.actions {
+    display: grid;
+    gap: 10px;
+    margin-top: 28px;
+}
+.actions button {
+    height: 50px;
+}
+.success {
+    color: #00a56a;
+}
+.failure {
+    color: #f05454;
+}

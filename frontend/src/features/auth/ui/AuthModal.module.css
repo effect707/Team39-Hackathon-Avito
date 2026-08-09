@@ -1,0 +1,66 @@
+.modal :global(.ant-modal-content) {
+    overflow: hidden;
+    padding: 0;
+    border-radius: 28px;
+}
+
+.modal :global(.ant-modal-container) {
+    overflow: hidden;
+    padding: 0;
+    border-radius: 28px;
+}
+
+.content {
+    padding: 42px 48px 24px;
+}
+.title {
+    margin: 0 0 28px;
+    font-size: 40px;
+    line-height: 1.05;
+}
+.form {
+    display: grid;
+    gap: 16px;
+}
+.field {
+    height: 52px;
+    border: 0;
+    background: #f2f2f2;
+}
+.submit {
+    width: max-content;
+    min-width: 132px;
+    height: 50px;
+}
+.footer {
+    margin-top: 0;
+    padding: 28px 48px 38px;
+    background: #f5f4f1;
+}
+.footer p {
+    margin: 0 0 14px;
+}
+.switch {
+    height: 48px;
+    background: white;
+    border: 0;
+    box-shadow: 0 5px 15px #00000012;
+}
+.legal {
+    margin-top: 24px !important;
+    color: #9b9b9b;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+@media (max-width: 560px) {
+    .content {
+        padding: 32px 24px 20px;
+    }
+    .footer {
+        padding: 24px;
+    }
+    .title {
+        font-size: 32px;
+    }
+}

@@ -1,0 +1,154 @@
+.page {
+    padding: 34px 0 70px;
+}
+.back {
+    display: inline-flex;
+    gap: 7px;
+    align-items: center;
+    padding: 0;
+    color: #000;
+}
+.page h1 {
+    margin: 18px 0 34px;
+    font-size: clamp(38px, 5vw, 56px);
+}
+.grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 430px;
+    gap: 44px;
+    align-items: start;
+}
+.left {
+    display: grid;
+    gap: 30px;
+}
+.section h2 {
+    margin: 0 0 18px;
+    font-size: 27px;
+}
+.delivery {
+    padding: 26px;
+    border: 14px solid #f2f2f2;
+    border-radius: 28px;
+}
+.delivery h3 {
+    margin: 0 0 8px;
+    font-size: 22px;
+}
+.delivery p {
+    margin: 0 0 18px;
+}
+.productRow {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+}
+.productRow img {
+    width: 78px;
+    height: 78px;
+    border-radius: 14px;
+    object-fit: cover;
+}
+.fields {
+    display: grid;
+    gap: 18px;
+    max-width: 680px;
+}
+.field {
+    height: 54px;
+    border: 0;
+    background: #f2f2f2;
+}
+.aside {
+    position: sticky;
+    top: 24px;
+    display: grid;
+    gap: 18px;
+}
+.order,
+.timer,
+.protection {
+    padding: 30px;
+    border-radius: 28px;
+    background: white;
+    box-shadow: 0 10px 38px #00000013;
+}
+.order h2,
+.timer h2,
+.protection h2 {
+    margin: 0 0 24px;
+    font-size: 27px;
+}
+.row {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    margin: 14px 0;
+}
+.total {
+    padding-top: 14px;
+    border-top: 1px dotted #aaa;
+    font-size: 22px;
+    font-weight: 750;
+}
+.pay {
+    width: 100%;
+    height: 58px;
+    margin-top: 20px;
+    border: 0;
+    border-radius: 16px;
+    background: #965eeb !important;
+    font-size: 18px;
+}
+.timerValue {
+    color: #965eeb;
+    font-size: 44px;
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
+}
+.warning .timerValue {
+    color: #f05454;
+}
+.timer p {
+    margin-bottom: 0;
+    color: #777;
+}
+.protectionGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.protectItem {
+    padding: 16px;
+    border-radius: 16px;
+    background: #f4f2f5;
+}
+.protectItem svg {
+    color: #965eeb;
+}
+.protectItem p {
+    margin: 10px 0 0;
+    line-height: 1.35;
+}
+@media (max-width: 850px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+    .aside {
+        position: static;
+    }
+}
+@media (max-width: 500px) {
+    .page h1 {
+        font-size: 36px;
+    }
+    .delivery {
+        border-width: 8px;
+        padding: 20px;
+    }
+    .order,
+    .timer,
+    .protection {
+        padding: 24px;
+    }
+}
