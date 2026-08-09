@@ -28,6 +28,9 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 	if got.DBMaxOpenConns != 20 {
 		t.Errorf("DBMaxOpenConns = %d, want 20", got.DBMaxOpenConns)
 	}
+	if len(got.CORSAllowedOrigins) != 1 || got.CORSAllowedOrigins[0] != "http://localhost:5173" {
+		t.Errorf("CORSAllowedOrigins = %v, want [http://localhost:5173]", got.CORSAllowedOrigins)
+	}
 }
 
 func TestLoadRejectsInvalidConfiguration(t *testing.T) {
@@ -85,6 +88,7 @@ func TestLoadOverridesEveryField(t *testing.T) {
 	t.Setenv("DB_MAX_OPEN_CONNS", "30")
 	t.Setenv("DB_MAX_IDLE_CONNS", "7")
 	t.Setenv("DB_CONN_MAX_LIFETIME", "10m")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 
 	got, err := Load()
 	if err != nil {
@@ -116,6 +120,15 @@ func TestLoadOverridesEveryField(t *testing.T) {
 	}
 	if got.DBConnMaxLifetime != 10*time.Minute {
 		t.Errorf("DBConnMaxLifetime = %s, want 10m", got.DBConnMaxLifetime)
+	}
+	wantOrigins := []string{"http://localhost:5173", "http://127.0.0.1:5173"}
+	if len(got.CORSAllowedOrigins) != len(wantOrigins) {
+		t.Fatalf("CORSAllowedOrigins = %v, want %v", got.CORSAllowedOrigins, wantOrigins)
+	}
+	for index, origin := range wantOrigins {
+		if got.CORSAllowedOrigins[index] != origin {
+			t.Errorf("CORSAllowedOrigins[%d] = %q, want %q", index, got.CORSAllowedOrigins[index], origin)
+		}
 	}
 }
 

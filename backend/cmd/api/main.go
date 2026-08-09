@@ -57,7 +57,7 @@ func run() error {
 
 	eventsHandler := events.NewHandler(hub)
 
-	router := httpapi.NewRouter(database.Checker{DB: db})
+	router := httpapi.NewRouter(database.Checker{DB: db}).WithCORS(config.CORSAllowedOrigins)
 	products.RegisterRoutes(router, productHandler)
 	queue.RegisterRoutes(router, queueHandler)
 	events.RegisterRoutes(router, eventsHandler)

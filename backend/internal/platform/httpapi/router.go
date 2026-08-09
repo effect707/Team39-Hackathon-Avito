@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,7 +19,9 @@ type Checker interface {
 }
 
 type Router struct {
-	mux *http.ServeMux
+	mux                *http.ServeMux
+	corsAllowedOrigins map[string]bool
+	corsAllowAnyOrigin bool
 }
 
 type contextKey string
@@ -27,10 +30,24 @@ const demoUserIDKey contextKey = "demo-user-id"
 const readinessTimeout = 2 * time.Second
 
 func NewRouter(checker Checker) *Router {
-	router := &Router{mux: http.NewServeMux()}
+	router := &Router{mux: http.NewServeMux(), corsAllowedOrigins: make(map[string]bool)}
 	router.Handle("GET /api/v1/health", healthHandler)
 	router.Handle("GET /api/v1/ready", readyHandler(checker))
 	router.mux.Handle("GET /metrics", promhttp.Handler())
+	return router
+}
+
+func (router *Router) WithCORS(allowedOrigins []string) *Router {
+	for _, origin := range allowedOrigins {
+		origin = strings.TrimSpace(origin)
+		if origin == "*" {
+			router.corsAllowAnyOrigin = true
+			continue
+		}
+		if origin != "" {
+			router.corsAllowedOrigins[origin] = true
+		}
+	}
 	return router
 }
 
@@ -43,7 +60,36 @@ func (router *Router) HandleAuth(pattern string, handler http.HandlerFunc) {
 }
 
 func (router *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	requestID(accessLog(http.HandlerFunc(router.recoverPanic))).ServeHTTP(writer, request)
+	next := requestID(accessLog(http.HandlerFunc(router.recoverPanic)))
+	if router.corsAllowAnyOrigin || len(router.corsAllowedOrigins) > 0 {
+		next = corsMiddleware(router)(next)
+	}
+	next.ServeHTTP(writer, request)
+}
+
+func corsMiddleware(router *Router) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			origin := request.Header.Get("Origin")
+			if origin == "" {
+				next.ServeHTTP(writer, request)
+				return
+			}
+			if router.corsAllowAnyOrigin || router.corsAllowedOrigins[origin] {
+				writer.Header().Set("Access-Control-Allow-Origin", origin)
+				writer.Header().Add("Vary", "Origin")
+				writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+				writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Demo-User-ID, X-Request-ID")
+				writer.Header().Set("Access-Control-Expose-Headers", "X-Request-ID")
+				writer.Header().Set("Access-Control-Max-Age", "600")
+			}
+			if request.Method == http.MethodOptions {
+				writer.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(writer, request)
+		})
+	}
 }
 
 func (router *Router) recoverPanic(writer http.ResponseWriter, request *http.Request) {

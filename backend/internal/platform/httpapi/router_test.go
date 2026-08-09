@@ -164,6 +164,90 @@ func TestMetricsIsAvailableAtInternalMetricsPath(t *testing.T) {
 	}
 }
 
+func TestCORSHandlesPreflightAndAllowedOrigins(t *testing.T) {
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil })).WithCORS([]string{"http://localhost:5173"})
+	router.HandleAuth("POST /api/v1/products/{product_id}/queue/join", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusNoContent)
+	})
+
+	t.Run("preflight from allowed origin", func(t *testing.T) {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/join", nil)
+		req.Header.Set("Origin", "http://localhost:5173")
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want 204", rec.Code)
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
+			t.Errorf("Access-Control-Allow-Origin = %q, want allowed origin", got)
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, "POST") {
+			t.Errorf("Access-Control-Allow-Methods = %q, want POST", got)
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "X-Demo-User-ID") {
+			t.Errorf("Access-Control-Allow-Headers = %q, want X-Demo-User-ID", got)
+		}
+	})
+
+	t.Run("actual request echoes allowed origin without auth", func(t *testing.T) {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/join", nil)
+		req.Header.Set("Origin", "http://localhost:5173")
+		req.Header.Set("X-Demo-User-ID", "40000000-0000-4000-8000-000000000001")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want 204", rec.Code)
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
+			t.Errorf("Access-Control-Allow-Origin = %q, want allowed origin", got)
+		}
+	})
+
+	t.Run("disallowed origin gets no CORS headers", func(t *testing.T) {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", nil)
+		req.Header.Set("Origin", "http://evil.example")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+			t.Errorf("Access-Control-Allow-Origin = %q, want empty for disallowed origin", got)
+		}
+	})
+
+	t.Run("same-origin request without Origin header is unaffected", func(t *testing.T) {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rec.Code)
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+			t.Errorf("Access-Control-Allow-Origin = %q, want empty for same-origin", got)
+		}
+	})
+}
+
+func TestCORSAllowsAnyOriginWildcard(t *testing.T) {
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil })).WithCORS([]string{"*"})
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", nil)
+	req.Header.Set("Origin", "https://frontend.example.com")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://frontend.example.com" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want request origin", got)
+	}
+}
+
 func TestRouterReturnsJSONErrorEnvelopeForUnknownPathAndMethod(t *testing.T) {
 	router := NewRouter(checkerFunc(func(context.Context) error { return nil }))
 	cases := []struct {

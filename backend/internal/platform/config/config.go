@@ -8,15 +8,16 @@ import (
 )
 
 type Config struct {
-	HTTPAddress       string        `env:"HTTP_ADDRESS,notEmpty" envDefault:":8080"`
-	MetricsAddress    string        `env:"METRICS_ADDRESS,notEmpty" envDefault:":9090"`
-	DatabaseURL       string        `env:"DATABASE_URL,required,notEmpty"`
-	DemoEnabled       bool          `env:"DEMO_MODE" envDefault:"true"`
-	WorkerInterval    time.Duration `env:"WORKER_INTERVAL" envDefault:"30s"`
-	GrantTTL          time.Duration `env:"GRANT_TTL" envDefault:"2m"`
-	DBMaxOpenConns    int           `env:"DB_MAX_OPEN_CONNS" envDefault:"20"`
-	DBMaxIdleConns    int           `env:"DB_MAX_IDLE_CONNS" envDefault:"10"`
-	DBConnMaxLifetime time.Duration `env:"DB_CONN_MAX_LIFETIME" envDefault:"5m"`
+	HTTPAddress        string        `env:"HTTP_ADDRESS,notEmpty" envDefault:":8080"`
+	MetricsAddress     string        `env:"METRICS_ADDRESS,notEmpty" envDefault:":9090"`
+	DatabaseURL        string        `env:"DATABASE_URL,required,notEmpty"`
+	DemoEnabled        bool          `env:"DEMO_MODE" envDefault:"true"`
+	WorkerInterval     time.Duration `env:"WORKER_INTERVAL" envDefault:"30s"`
+	GrantTTL           time.Duration `env:"GRANT_TTL" envDefault:"2m"`
+	DBMaxOpenConns     int           `env:"DB_MAX_OPEN_CONNS" envDefault:"20"`
+	DBMaxIdleConns     int           `env:"DB_MAX_IDLE_CONNS" envDefault:"10"`
+	DBConnMaxLifetime  time.Duration `env:"DB_CONN_MAX_LIFETIME" envDefault:"5m"`
+	CORSAllowedOrigins []string      `env:"CORS_ALLOWED_ORIGINS" envDefault:"http://localhost:5173"`
 }
 
 func Load() (Config, error) {
