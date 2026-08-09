@@ -18,8 +18,7 @@ type Checker interface {
 }
 
 type Router struct {
-	mux         *http.ServeMux
-	demoEnabled bool
+	mux *http.ServeMux
 }
 
 type contextKey string
@@ -27,24 +26,11 @@ type contextKey string
 const demoUserIDKey contextKey = "demo-user-id"
 const readinessTimeout = 2 * time.Second
 
-func NewRouter(checker Checker, demoEnabled bool) *Router {
-	router := &Router{mux: http.NewServeMux(), demoEnabled: demoEnabled}
+func NewRouter(checker Checker) *Router {
+	router := &Router{mux: http.NewServeMux()}
 	router.Handle("GET /api/v1/health", healthHandler)
 	router.Handle("GET /api/v1/ready", readyHandler(checker))
 	router.mux.Handle("GET /metrics", promhttp.Handler())
-	router.Handle("GET /api/v1/products", notImplemented)
-	router.Handle("GET /api/v1/products/{product_id}", notImplemented)
-	router.Handle("GET /api/v1/products/{product_id}/alternatives", notImplemented)
-	router.HandleDemo("POST /api/v1/products/{product_id}/queue/join", notImplemented)
-	router.HandleDemo("GET /api/v1/products/{product_id}/queue/me", notImplemented)
-	router.HandleDemo("DELETE /api/v1/products/{product_id}/queue/me", notImplemented)
-	router.HandleDemo("GET /api/v1/products/{product_id}/queue/events", notImplemented)
-	router.HandleDemo("POST /api/v1/grants/{grant_id}/checkout", notImplemented)
-	if demoEnabled {
-		router.HandleDemo("POST /api/v1/demo/grants/{grant_id}/payment-result", notImplemented)
-	} else {
-		router.Handle("POST /api/v1/demo/grants/{grant_id}/payment-result", notFound)
-	}
 	return router
 }
 
@@ -52,12 +38,8 @@ func (router *Router) Handle(pattern string, handler http.HandlerFunc) {
 	router.mux.HandleFunc(pattern, handler)
 }
 
-func (router *Router) HandleDemo(pattern string, handler http.HandlerFunc) {
-	if router.demoEnabled {
-		router.mux.Handle(pattern, demoAuth(handler))
-		return
-	}
-	router.mux.HandleFunc(pattern, handler)
+func (router *Router) HandleAuth(pattern string, handler http.HandlerFunc) {
+	router.mux.Handle(pattern, demoAuth(handler))
 }
 
 func (router *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -213,12 +195,12 @@ func DemoUserID(ctx context.Context) (string, bool) {
 	return userID, ok
 }
 
-func notImplemented(writer http.ResponseWriter, request *http.Request) {
-	writeError(writer, request, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Маршрут ещё не реализован")
+func WriteError(writer http.ResponseWriter, request *http.Request, status int, code, message string) {
+	writeError(writer, request, status, code, message)
 }
 
-func notFound(writer http.ResponseWriter, request *http.Request) {
-	writeError(writer, request, http.StatusNotFound, "NOT_FOUND", "Маршрут недоступен")
+func WriteJSON(writer http.ResponseWriter, status int, body any) {
+	writeJSON(writer, status, body)
 }
 
 func writeError(writer http.ResponseWriter, request *http.Request, status int, code, message string) {

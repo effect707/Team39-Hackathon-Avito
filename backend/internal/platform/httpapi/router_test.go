@@ -19,7 +19,7 @@ type checkerFunc func(context.Context) error
 func (fn checkerFunc) Check(ctx context.Context) error { return fn(ctx) }
 
 func TestRouterPropagatesRequestIDToSuccessResponse(t *testing.T) {
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }))
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/health", nil)
 	req.Header.Set("X-Request-ID", "request-123")
 	rec := httptest.NewRecorder()
@@ -38,7 +38,7 @@ func TestRouterPropagatesRequestIDToSuccessResponse(t *testing.T) {
 }
 
 func TestRecoveryReturnsRequestIDErrorEnvelope(t *testing.T) {
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }))
 	router.Handle("GET /panic", func(http.ResponseWriter, *http.Request) { panic("boom") })
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/panic", nil)
 	req.Header.Set("X-Request-ID", "recover-123")
@@ -58,7 +58,7 @@ func TestRecoveryReturnsRequestIDErrorEnvelope(t *testing.T) {
 func TestReadyReportsDependencyState(t *testing.T) {
 	t.Run("healthy", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		NewRouter(checkerFunc(func(context.Context) error { return nil }), true).ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/ready", nil))
+		NewRouter(checkerFunc(func(context.Context) error { return nil })).ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/ready", nil))
 		if rec.Code != http.StatusOK {
 			t.Errorf("status = %d, want 200", rec.Code)
 		}
@@ -66,7 +66,7 @@ func TestReadyReportsDependencyState(t *testing.T) {
 
 	t.Run("unhealthy", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		NewRouter(checkerFunc(func(context.Context) error { return errors.New("database unavailable") }), true).ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/ready", nil))
+		NewRouter(checkerFunc(func(context.Context) error { return errors.New("database unavailable") })).ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/ready", nil))
 		if rec.Code != http.StatusServiceUnavailable {
 			t.Fatalf("status = %d, want 503", rec.Code)
 		}
@@ -88,7 +88,7 @@ func TestReadyLimitsDependencyCheckDuration(t *testing.T) {
 	})
 	recorder := httptest.NewRecorder()
 
-	NewRouter(checker, true).ServeHTTP(
+	NewRouter(checker).ServeHTTP(
 		recorder,
 		httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/ready", nil),
 	)
@@ -103,7 +103,10 @@ func TestReadyLimitsDependencyCheckDuration(t *testing.T) {
 }
 
 func TestDomainEndpointsRequireDemoIdentityAndPropagateIt(t *testing.T) {
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }))
+	router.HandleAuth("POST /api/v1/products/{product_id}/queue/join", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusNoContent)
+	})
 
 	t.Run("missing identity", func(t *testing.T) {
 		rec := httptest.NewRecorder()
@@ -117,21 +120,18 @@ func TestDomainEndpointsRequireDemoIdentityAndPropagateIt(t *testing.T) {
 		}
 	})
 
-	t.Run("valid identity reaches the domain stub", func(t *testing.T) {
+	t.Run("valid identity reaches the domain handler", func(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/join", nil)
 		req.Header.Set("X-Demo-User-ID", "40000000-0000-4000-8000-000000000001")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
-		if rec.Code != http.StatusNotImplemented {
-			t.Errorf("status = %d, want 501", rec.Code)
-		}
-		if got := rec.Body.String(); got == "" || !strings.Contains(got, "NOT_IMPLEMENTED") {
-			t.Errorf("body = %q, want not-implemented error envelope", got)
+		if rec.Code != http.StatusNoContent {
+			t.Errorf("status = %d, want 204", rec.Code)
 		}
 	})
 
 	t.Run("valid identity is available to a protected handler", func(t *testing.T) {
-		router.HandleDemo("GET /demo-probe", func(w http.ResponseWriter, r *http.Request) {
+		router.HandleAuth("GET /demo-probe", func(w http.ResponseWriter, r *http.Request) {
 			userID, ok := DemoUserID(r.Context())
 			if !ok {
 				t.Fatal("demo identity missing from handler context")
@@ -150,38 +150,8 @@ func TestDomainEndpointsRequireDemoIdentityAndPropagateIt(t *testing.T) {
 	})
 }
 
-func TestAllDeclaredDomainStubsReturnNotImplementedForAuthenticatedUser(t *testing.T) {
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
-	paths := []struct {
-		method string
-		path   string
-	}{
-		{http.MethodGet, "/api/v1/products"},
-		{http.MethodGet, "/api/v1/products/10000000-0000-4000-8000-000000000001"},
-		{http.MethodGet, "/api/v1/products/10000000-0000-4000-8000-000000000001/alternatives"},
-		{http.MethodPost, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/join"},
-		{http.MethodGet, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/me"},
-		{http.MethodDelete, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/me"},
-		{http.MethodGet, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/events"},
-		{http.MethodPost, "/api/v1/grants/50000000-0000-4000-8000-000000000001/checkout"},
-		{http.MethodPost, "/api/v1/demo/grants/50000000-0000-4000-8000-000000000001/payment-result"},
-	}
-
-	for _, tc := range paths {
-		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
-			req := httptest.NewRequestWithContext(context.Background(), tc.method, tc.path, nil)
-			req.Header.Set("X-Demo-User-ID", "40000000-0000-4000-8000-000000000001")
-			rec := httptest.NewRecorder()
-			router.ServeHTTP(rec, req)
-			if rec.Code != http.StatusNotImplemented {
-				t.Errorf("status = %d, want 501", rec.Code)
-			}
-		})
-	}
-}
-
 func TestMetricsIsAvailableAtInternalMetricsPath(t *testing.T) {
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }))
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil))
@@ -194,30 +164,8 @@ func TestMetricsIsAvailableAtInternalMetricsPath(t *testing.T) {
 	}
 }
 
-func TestBusinessRoutesDoNotRequireDemoIdentityWhenDemoIsDisabled(t *testing.T) {
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), false)
-	t.Run("business route bypasses demo middleware", func(t *testing.T) {
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/join", nil))
-		if rec.Code != http.StatusNotImplemented {
-			t.Errorf("status = %d, want 501 when demo middleware is disabled", rec.Code)
-		}
-	})
-
-	t.Run("demo payment endpoint remains unavailable", func(t *testing.T) {
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/demo/grants/50000000-0000-4000-8000-000000000001/payment-result", nil))
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("status = %d, want 404", rec.Code)
-		}
-		if got := rec.Body.String(); !strings.Contains(got, "\"code\":\"NOT_FOUND\"") {
-			t.Errorf("body = %q, want JSON not-found envelope", got)
-		}
-	})
-}
-
 func TestRouterReturnsJSONErrorEnvelopeForUnknownPathAndMethod(t *testing.T) {
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }))
 	cases := []struct {
 		name   string
 		method string
@@ -249,7 +197,7 @@ func TestRouterReturnsJSONErrorEnvelopeForUnknownPathAndMethod(t *testing.T) {
 }
 
 func TestRouterPreservesServeMuxRouteMetadata(t *testing.T) {
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }))
 	var pattern string
 	var pathValue string
 	router.Handle("GET /route-metadata/{id}", func(writer http.ResponseWriter, request *http.Request) {
@@ -267,7 +215,7 @@ func TestRouterPreservesServeMuxRouteMetadata(t *testing.T) {
 }
 
 func TestRouterPreservesStreamingFlusher(t *testing.T) {
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }))
 	router.Handle("GET /stream", func(writer http.ResponseWriter, _ *http.Request) {
 		flusher, ok := writer.(http.Flusher)
 		if !ok {
@@ -298,7 +246,7 @@ func TestRouterJSONMethodNotAllowedPreservesNativeAllowHeader(t *testing.T) {
 		t.Fatalf("native ServeMux Allow = %q, want %q", got, "GET, HEAD")
 	}
 
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }))
 	router.Handle("GET /allow/{id}", func(http.ResponseWriter, *http.Request) {})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/allow/42", nil)
@@ -324,8 +272,12 @@ func TestRouterWritesStructuredAccessLogForEveryOutcome(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
 	t.Cleanup(func() { slog.SetDefault(previous) })
 
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }))
 	router.Handle("GET /panic-for-access-log", func(http.ResponseWriter, *http.Request) { panic("boom") })
+	router.HandleAuth("POST /api/v1/products/{product_id}/queue/join", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write([]byte("ok"))
+	})
 	requests := []struct {
 		method string
 		path   string
@@ -336,7 +288,7 @@ func TestRouterWritesStructuredAccessLogForEveryOutcome(t *testing.T) {
 		{http.MethodPost, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/join", http.StatusUnauthorized, false},
 		{http.MethodGet, "/missing", http.StatusNotFound, false},
 		{http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, false},
-		{http.MethodPost, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/join", http.StatusNotImplemented, true},
+		{http.MethodPost, "/api/v1/products/10000000-0000-4000-8000-000000000001/queue/join", http.StatusOK, true},
 		{http.MethodGet, "/panic-for-access-log", http.StatusInternalServerError, false},
 	}
 
@@ -390,7 +342,7 @@ func TestRouterAccessLogRecordsFirstResponseStatus(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
 	t.Cleanup(func() { slog.SetDefault(previous) })
 
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }))
 	router.Handle("GET /first-response-status", func(writer http.ResponseWriter, _ *http.Request) {
 		writer.WriteHeader(http.StatusCreated)
 		writer.WriteHeader(http.StatusInternalServerError)

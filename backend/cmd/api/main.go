@@ -7,9 +7,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/team39/avito-fair-queue/backend/internal/events"
+	"github.com/team39/avito-fair-queue/backend/internal/handlers"
 	"github.com/team39/avito-fair-queue/backend/internal/platform/config"
 	"github.com/team39/avito-fair-queue/backend/internal/platform/database"
-	"github.com/team39/avito-fair-queue/backend/internal/platform/httpapi"
 	"github.com/team39/avito-fair-queue/backend/internal/platform/server"
 )
 
@@ -32,6 +33,15 @@ func run() error {
 		return err
 	}
 	defer func() { _ = database.Close(db) }()
+
+	app := handlers.New(handlers.Deps{
+		DB:       db,
+		GrantTTL: config.GrantTTL,
+	})
+
+	listener := events.NewListener(config.DatabaseURL, app.Hub)
+	go listener.Run(ctx)
+
 	slog.Info("api started", "address", config.HTTPAddress)
-	return server.Run(ctx, config.HTTPAddress, httpapi.NewRouter(database.Checker{DB: db}, config.DemoEnabled))
+	return server.Run(ctx, config.HTTPAddress, app.Router)
 }
