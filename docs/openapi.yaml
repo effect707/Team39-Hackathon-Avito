@@ -4,8 +4,7 @@ info:
   version: 1.0.0
   description: >-
     API MVP «Авито Честная очередь». Сервер принимает решения о FIFO,
-    резервировании и доступе к checkout. Пока walking-skeleton обработчики
-    не реализованы, маршруты возвращают 501 NOT_IMPLEMENTED.
+    резервировании и доступе к checkout на основе PostgreSQL.
 servers:
   - url: /
 tags:
@@ -13,7 +12,7 @@ tags:
   - name: Products
   - name: Queue
   - name: Checkout
-  - name: Demo
+  - name: Payment
 paths:
   /api/v1/health:
     get:
@@ -53,8 +52,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductListResponse'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /api/v1/products/{product_id}:
     parameters:
       - $ref: '#/components/parameters/ProductId'
@@ -71,8 +68,6 @@ paths:
                 $ref: '#/components/schemas/Product'
         '404':
           $ref: '#/components/responses/ProductNotFound'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /api/v1/products/{product_id}/alternatives:
     parameters:
       - $ref: '#/components/parameters/ProductId'
@@ -89,8 +84,6 @@ paths:
                 $ref: '#/components/schemas/ProductListResponse'
         '404':
           $ref: '#/components/responses/ProductNotFound'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /api/v1/products/{product_id}/queue/join:
     parameters:
       - $ref: '#/components/parameters/ProductId'
@@ -116,8 +109,6 @@ paths:
           $ref: '#/components/responses/ProductNotFound'
         '409':
           $ref: '#/components/responses/QueueConflict'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /api/v1/products/{product_id}/queue/me:
     parameters:
       - $ref: '#/components/parameters/ProductId'
@@ -138,8 +129,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/QueueEntryNotFound'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
     delete:
       tags: [Queue]
       summary: Выйти из очереди или отказаться от права
@@ -159,8 +148,6 @@ paths:
           $ref: '#/components/responses/QueueEntryNotFound'
         '409':
           $ref: '#/components/responses/QueueConflict'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /api/v1/products/{product_id}/queue/events:
     parameters:
       - $ref: '#/components/parameters/ProductId'
@@ -197,8 +184,6 @@ paths:
                     data: {"product_id":"10000000-0000-4000-8000-000000000001","queue_entry_id":"30000000-0000-4000-8000-000000000001","occurred_at":"2026-08-05T10:00:00Z"}
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
   /api/v1/grants/{grant_id}/checkout:
     parameters:
       - $ref: '#/components/parameters/GrantId'
@@ -224,18 +209,16 @@ paths:
           $ref: '#/components/responses/GrantNotFound'
         '409':
           $ref: '#/components/responses/GrantConflict'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-  /api/v1/demo/grants/{grant_id}/payment-result:
+  /api/v1/grants/{grant_id}/payment-result:
     parameters:
       - $ref: '#/components/parameters/GrantId'
     post:
-      tags: [Demo]
-      summary: Передать demo-результат mock Payment
+      tags: [Payment]
+      summary: Передать результат mock Payment
       description: >-
-        Доступно только в demo-режиме. Повтор с тем же idempotency_key
-        возвращает уже зафиксированный результат без нового эффекта.
-      operationId: submitDemoPaymentResult
+        Повтор с тем же idempotency_key возвращает уже зафиксированный
+        результат без нового эффекта.
+      operationId: submitPaymentResult
       security:
         - DemoUser: []
       requestBody:
@@ -259,15 +242,13 @@ paths:
           $ref: '#/components/responses/GrantNotFound'
         '409':
           $ref: '#/components/responses/GrantConflict'
-        '501':
-          $ref: '#/components/responses/NotImplemented'
 components:
   securitySchemes:
     DemoUser:
       type: apiKey
       in: header
       name: X-Demo-User-ID
-      description: Demo-идентичность пользователя; вне demo-режима не используется.
+      description: Идентичность пользователя из доверенного middleware через `X-Demo-User-ID`.
   parameters:
     ProductId:
       name: product_id
@@ -284,17 +265,6 @@ components:
         type: string
         format: uuid
   responses:
-    NotImplemented:
-      description: Маршрут объявлен в контракте, но ещё не реализован walking skeleton.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorEnvelope'
-          example:
-            error:
-              code: NOT_IMPLEMENTED
-              message: Маршрут ещё не реализован
-              request_id: 018f1f15-0000-7000-8000-000000000001
     InvalidRequest:
       description: Некорректное тело или параметры запроса.
       content:
@@ -522,11 +492,8 @@ components:
     SSESignal:
       type: object
       additionalProperties: false
-      required: [type, product_id, queue_entry_id, occurred_at]
+      required: [product_id, queue_entry_id, occurred_at]
       properties:
-        type:
-          type: string
-          enum: [queue.changed]
         product_id:
           type: string
           format: uuid
@@ -551,23 +518,20 @@ components:
         code:
           type: string
           enum:
-            - NOT_IMPLEMENTED
             - INVALID_REQUEST
             - UNAUTHORIZED
             - NOT_FOUND
+            - NOT_IMPLEMENTED
             - METHOD_NOT_ALLOWED
             - INTERNAL
             - PRODUCT_NOT_FOUND
             - QUEUE_REQUIRED
-            - ENTRY_ALREADY_ACTIVE
             - QUEUE_ENTRY_NOT_FOUND
             - GRANT_NOT_FOUND
-            - GRANT_FORBIDDEN
             - GRANT_EXPIRED
             - GRANT_ALREADY_USED
             - PRODUCT_SOLD_OUT
             - INVALID_STATE
-            - CONFLICT
             - SERVICE_UNAVAILABLE
         message:
           type: string
