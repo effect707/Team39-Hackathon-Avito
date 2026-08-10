@@ -55,7 +55,7 @@ test "$counts" = "5|9"
 "${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U queue -d queue \
     < "$repo_dir/backend/tests/integration/schema_constraints.sql"
 
-"${compose[@]}" up -d --scale worker=2 api-1 api-2 worker
+"${compose[@]}" up --build -d --scale worker=2 api-1 api-2 worker
 wait_for_ready "$integration_api_one_port"
 wait_for_ready "$integration_api_two_port"
 
@@ -150,3 +150,136 @@ lifecycle=$("${compose[@]}" exec -T postgres psql -U queue -d queue -Atc \
     FROM queue_entries
     WHERE product_id = '$product_id';")
 test "$lifecycle" = "2|5|93|5|5|0"
+
+payment_product_id=10000000-0000-4000-8000-000000000003
+payment_user_id=40000000-0000-4000-8000-000000000201
+foreign_user_id=40000000-0000-4000-8000-000000000202
+payment_join_response="$response_dir/payment-join.json"
+curl --max-time 10 --fail --silent \
+    --request POST \
+    --header "X-Demo-User-ID: $payment_user_id" \
+    --output "$payment_join_response" \
+    "http://127.0.0.1:$integration_api_one_port/api/v1/products/$payment_product_id/queue/join"
+payment_grant_id=$(ruby -rjson -e 'puts JSON.parse(File.read(ARGV.fetch(0))).fetch("grant").fetch("id")' \
+    "$payment_join_response")
+
+foreign_checkout_code=$(curl --max-time 10 --silent --output /dev/null --write-out '%{http_code}' \
+    --request POST \
+    --header "X-Demo-User-ID: $foreign_user_id" \
+    "http://127.0.0.1:$integration_api_two_port/api/v1/grants/$payment_grant_id/checkout")
+test "$foreign_checkout_code" = 404
+
+missing_checkout_code=$(curl --max-time 10 --silent --output /dev/null --write-out '%{http_code}' \
+    --request POST \
+    --header "X-Demo-User-ID: $payment_user_id" \
+    "http://127.0.0.1:$integration_api_two_port/api/v1/grants/50000000-0000-4000-8000-000000000999/checkout")
+test "$missing_checkout_code" = 404
+
+curl --max-time 10 --fail --silent \
+    --request POST \
+    --header "X-Demo-User-ID: $payment_user_id" \
+    --output /dev/null \
+    "http://127.0.0.1:$integration_api_one_port/api/v1/grants/$payment_grant_id/checkout"
+
+idempotency_key=50000000-0000-4000-8000-000000000201
+payment_body="{\"idempotency_key\":\"$idempotency_key\",\"result\":\"success\"}"
+payment_pids=()
+for replica in 1 2; do
+    if [[ "$replica" = 1 ]]; then
+        port=$integration_api_one_port
+    else
+        port=$integration_api_two_port
+    fi
+    curl --max-time 15 --silent --show-error \
+        --request POST \
+        --header 'Content-Type: application/json' \
+        --header "X-Demo-User-ID: $payment_user_id" \
+        --data "$payment_body" \
+        --output "$response_dir/payment-$replica.json" \
+        --write-out '%{http_code}' \
+        "http://127.0.0.1:$port/api/v1/demo/grants/$payment_grant_id/payment-result" \
+        > "$response_dir/payment-$replica.code" &
+    payment_pids+=("$!")
+done
+for pid in "${payment_pids[@]}"; do
+    wait "$pid"
+done
+
+ruby -rjson -e '
+dir = ARGV.fetch(0)
+codes = [1, 2].map { |index| File.read(File.join(dir, "payment-#{index}.code")) }
+unless codes == ["200", "200"]
+  bodies = [1, 2].map { |index| File.read(File.join(dir, "payment-#{index}.json")) }
+  abort "concurrent payment codes: #{codes}; bodies: #{bodies}"
+end
+responses = [1, 2].map { |index| JSON.parse(File.read(File.join(dir, "payment-#{index}.json"))) }
+flags = responses.map { |response| response.fetch("already_processed") }.sort_by(&:to_s)
+abort "concurrent payment flags: #{flags}" unless flags == [false, true]
+' "$response_dir"
+
+retry_processed=$(curl --max-time 10 --fail --silent \
+    --request POST \
+    --header 'Content-Type: application/json' \
+    --header "X-Demo-User-ID: $payment_user_id" \
+    --data "$payment_body" \
+    "http://127.0.0.1:$integration_api_one_port/api/v1/demo/grants/$payment_grant_id/payment-result" \
+    | ruby -rjson -e 'puts JSON.parse(STDIN.read).fetch("already_processed")')
+test "$retry_processed" = true
+
+foreign_payment_code=$(curl --max-time 10 --silent --output /dev/null --write-out '%{http_code}' \
+    --request POST \
+    --header 'Content-Type: application/json' \
+    --header "X-Demo-User-ID: $foreign_user_id" \
+    --data "$payment_body" \
+    "http://127.0.0.1:$integration_api_two_port/api/v1/demo/grants/$payment_grant_id/payment-result")
+test "$foreign_payment_code" = 404
+
+used_checkout_code=$(curl --max-time 10 --silent --output /dev/null --write-out '%{http_code}' \
+    --request POST \
+    --header "X-Demo-User-ID: $payment_user_id" \
+    "http://127.0.0.1:$integration_api_two_port/api/v1/grants/$payment_grant_id/checkout")
+test "$used_checkout_code" = 409
+
+payment_state=$("${compose[@]}" exec -T postgres psql -U queue -d queue -Atc \
+    "SELECT
+        (SELECT status FROM queue_entries WHERE product_id = '$payment_product_id' AND user_id = '$payment_user_id') || '|' ||
+        (SELECT status FROM purchase_grants WHERE id = '$payment_grant_id') || '|' ||
+        (SELECT status FROM inventory_units WHERE product_id = '$payment_product_id') || '|' ||
+        (SELECT count(*) FROM checkout_attempts WHERE grant_id = '$payment_grant_id');")
+test "$payment_state" = "PURCHASED|PURCHASED|SOLD|1"
+
+race_product_id=10000000-0000-4000-8000-000000000004
+race_user_id=40000000-0000-4000-8000-000000000301
+race_join_response="$response_dir/race-join.json"
+curl --max-time 10 --fail --silent \
+    --request POST \
+    --header "X-Demo-User-ID: $race_user_id" \
+    --output "$race_join_response" \
+    "http://127.0.0.1:$integration_api_one_port/api/v1/products/$race_product_id/queue/join"
+race_grant_id=$(ruby -rjson -e 'puts JSON.parse(File.read(ARGV.fetch(0))).fetch("grant").fetch("id")' \
+    "$race_join_response")
+
+"${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U queue -d queue -c \
+    "UPDATE purchase_grants SET expires_at = now() WHERE id = '$race_grant_id';" >/dev/null
+race_checkout_code=$(curl --max-time 10 --silent --output /dev/null --write-out '%{http_code}' \
+    --request POST \
+    --header "X-Demo-User-ID: $race_user_id" \
+    "http://127.0.0.1:$integration_api_two_port/api/v1/grants/$race_grant_id/checkout")
+test "$race_checkout_code" = 409
+
+for _ in {1..40}; do
+    race_grant_status=$("${compose[@]}" exec -T postgres psql -U queue -d queue -Atc \
+        "SELECT status FROM purchase_grants WHERE id = '$race_grant_id';")
+    if [[ "$race_grant_status" = EXPIRED ]]; then
+        break
+    fi
+    sleep 0.25
+done
+test "$race_grant_status" = EXPIRED
+
+race_state=$("${compose[@]}" exec -T postgres psql -U queue -d queue -Atc \
+    "SELECT
+        (SELECT status FROM queue_entries WHERE product_id = '$race_product_id' AND user_id = '$race_user_id') || '|' ||
+        (SELECT status FROM purchase_grants WHERE id = '$race_grant_id') || '|' ||
+        (SELECT status FROM inventory_units WHERE product_id = '$race_product_id');")
+test "$race_state" = "EXPIRED|EXPIRED|AVAILABLE"

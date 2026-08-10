@@ -16,14 +16,15 @@
 
 ## Критично до финальной сдачи
 
-1. Добавить оставшиеся конкурентные PostgreSQL-тесты из Definition of Done: checkout против expiry и конкурентный повтор payment callback.
-2. Для публичного full-stack demo развернуть frontend отдельно и задать ему `VITE_API_URL`, либо добавить общий reverse proxy. Текущий production workflow автоматически разворачивает только backend.
+1. Для публичного full-stack demo развернуть frontend отдельно и задать ему `VITE_API_URL`, либо добавить общий reverse proxy. Текущий production workflow автоматически разворачивает только backend.
+2. Пройти browser-level SSE disconnect/reconnect на публичном стенде; локальные frontend-тесты и REST-восстановление через вторую API-реплику уже покрыты.
 
 ## Подтверждённые проверки
 
 - `make verify` проходит полностью: форматирование, lint, Go unit/race, 64 frontend-теста, PostgreSQL integration, OpenAPI/Compose validation и production builds;
 - PostgreSQL integration запускает две API-реплики и два worker: 100 конкурентных join дают `5 GRANTED + 95 WAITING`, repeat join сохраняет заявку, expiry двух прав продвигает ticket 6 и 7 без двойного резерва;
-- `make smoke` собирает Compose, проверяет health/readiness обеих API-реплик и доступность `api-2` после остановки `api-1`;
+- тот же integration-тест отклоняет отсутствующее, чужое, просроченное и использованное право, проверяет конкурентный повтор payment callback, одну попытку/продажу и согласованный итог expiry;
+- `make smoke` собирает Compose, проверяет health/readiness обеих API-реплик и восстанавливает ту же queue-заявку через `api-2` после остановки `api-1`;
 - ручной demo-path через разные API-реплики подтверждён: `GRANTED → CHECKOUT_PENDING → FAILED`, освободившаяся единица передана следующему `WAITING` с большим `ticket_no`;
 - расширенная конкурентная матрица должна фиксироваться отдельными PostgreSQL-тестами, чтобы результат был воспроизводим в CI.
 
@@ -38,6 +39,6 @@
 
 ## Порядок оставшейся работы
 
-1. Конкурентные тесты критических инвариантов.
-2. Публичный frontend + backend URL и CORS.
+1. Публичный frontend + backend URL и CORS.
+2. Browser-level SSE reconnect на публичном стенде.
 3. Нагрузочный сценарий и дополнительные метрики.

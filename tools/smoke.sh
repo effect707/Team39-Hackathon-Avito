@@ -41,8 +41,22 @@ wait_for_ready "$api_two_url"
 check_api "$api_one_url"
 check_api "$api_two_url"
 
+docker compose run --rm migrate seed >/dev/null
+smoke_user_id=40000000-0000-4000-8000-000000000900
+smoke_product_id=10000000-0000-4000-8000-000000000002
+state_before=$(curl --max-time 10 --fail --silent \
+    --request POST \
+    --header "X-Demo-User-ID: $smoke_user_id" \
+    "$api_one_url/api/v1/products/$smoke_product_id/queue/join" \
+    | ruby -rjson -e 'state=JSON.parse(STDIN.read); puts "#{state.fetch("queue_entry_id")}|#{state.fetch("ticket_no")}"')
+
 docker compose stop api-1
 api_one_stopped=true
 
 wait_for_ready "$api_two_url"
 check_api "$api_two_url"
+state_after=$(curl --max-time 10 --fail --silent \
+    --header "X-Demo-User-ID: $smoke_user_id" \
+    "$api_two_url/api/v1/products/$smoke_product_id/queue/me" \
+    | ruby -rjson -e 'state=JSON.parse(STDIN.read); puts "#{state.fetch("queue_entry_id")}|#{state.fetch("ticket_no")}"')
+test "$state_after" = "$state_before"

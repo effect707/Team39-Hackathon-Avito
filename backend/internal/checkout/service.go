@@ -122,6 +122,9 @@ func (s *Service) SubmitPaymentResult(ctx context.Context, grantID, userID, idem
 			if err != nil {
 				return err
 			}
+			if grant.UserID != userID {
+				return ErrGrantForbidden
+			}
 			outcome = &PaymentResult{Grant: grantView(grant), IdempotencyKey: idempotencyKey, AlreadyProcessed: true}
 			return nil
 		}
@@ -140,6 +143,17 @@ func (s *Service) SubmitPaymentResult(ctx context.Context, grantID, userID, idem
 		}
 		current, err := s.repo.LockGrantByID(tx, grantID)
 		if err != nil {
+			return err
+		}
+		stored, err = s.repo.GetAttemptByKey(tx, idempotencyKey)
+		if err == nil {
+			if stored.GrantID != grantID {
+				return ErrGrantNotFound
+			}
+			outcome = &PaymentResult{Grant: grantView(current), IdempotencyKey: idempotencyKey, AlreadyProcessed: true}
+			return nil
+		}
+		if !errors.Is(err, ErrAttemptNotFound) {
 			return err
 		}
 		if current.Status != state.GrantCheckoutPending {

@@ -175,7 +175,7 @@ docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 api-1 
 
 - Нет Redis, Kafka, Kubernetes, настоящей авторизации, платежей и AI-интеграций.
 - Demo deployment работает по IPv4/HTTP; domain, DNS и TLS — отдельная задача.
-- Основной demo-path и конкурентный FIFO/promotion-сценарий реализованы, но обязательная матрица checkout/expiry/idempotency-тестов на настоящем PostgreSQL ещё не закрыта полностью.
+- Основной demo-path и критические FIFO/promotion/checkout/expiry/idempotency-сценарии проверяются на настоящем PostgreSQL; browser-level SSE reconnect остаётся отдельной frontend-проверкой.
 - Production workflow разворачивает backend без публичного frontend и без единого балансирующего URL для двух API-реплик.
 - Поиск, глобальное восстановление SSE-подписок, load generator и остальные известные пробелы перечислены в [`docs/MISSING_BACKEND_METHODS.md`](docs/MISSING_BACKEND_METHODS.md).
 
