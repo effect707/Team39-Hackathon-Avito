@@ -142,6 +142,7 @@ jobs:
             "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
             'DEMO_MODE=true' \
             'WORKER_INTERVAL=30s' \
+            'GRANT_TTL=2m' \
             'DB_MAX_OPEN_CONNS=20' \
             'DB_MAX_IDLE_CONNS=10' \
             'DB_CONN_MAX_LIFETIME=5m' \

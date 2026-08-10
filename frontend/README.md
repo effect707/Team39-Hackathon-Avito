@@ -1,6 +1,6 @@
 # Frontend «Авито Честная очередь»
 
-React/Vite frontend по умолчанию работает с реальным API через `/api/v1`. В dev-режиме Vite проксирует `/api` на edge Nginx по адресу `http://localhost:8080`.
+React/Vite frontend по умолчанию работает с реальным API через `/api/v1`. В dev-режиме Vite проксирует `/api` напрямую на первую API-реплику по адресу `http://localhost:8080`.
 
 ```bash
 npm ci

@@ -40,6 +40,16 @@ make up
 make seed
 ```
 
+Во втором терминале запустите frontend:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Откройте `http://localhost:5173`. Vite проксирует `/api/v1` на первую API-реплику по адресу `http://localhost:8080`. Для автономного просмотра интерфейса без backend используйте `npm run mockapi`; это отдельный browser mock, а не проверка серверной FIFO-логики.
+
 После запуска:
 
 - api-1 liveness: `http://localhost:8080/api/v1/health`;
@@ -56,6 +66,25 @@ Seed идемпотентен и создаёт:
 - Sony A6400, Fujifilm XF 23mm и Xbox Series X как альтернативы.
 
 В demo-режиме бизнес-запросы передают UUID тестового пользователя только в `X-Demo-User-ID`. `user_id` в JSON не принимается. Для curl-сценариев можно использовать `40000000-0000-4000-8000-000000000001`.
+
+## Demo-сценарий
+
+1. Откройте Fujifilm X100V и зарегистрируйте demo-пользователя — регистрация локальная и нужна только для UUID в `X-Demo-User-ID`.
+2. Нажмите «Встать в очередь». При свободной единственной единице пользователь сразу получает временное право.
+3. Во втором браузерном профиле войдите другим demo-пользователем и встаньте в очередь на тот же товар — он получит статус `WAITING`.
+4. Первый пользователь переходит к checkout и выбирает demo-результат: `success` завершает покупку, `failure` или `timeout` освобождает единицу.
+5. При освобождении или автоматическом истечении TTL worker продвигает минимальный `ticket_no`; SSE служит сигналом, после которого frontend перечитывает REST-state.
+
+Быстрая проверка backend без UI:
+
+```bash
+curl http://localhost:8080/api/v1/products
+curl -X POST \
+  -H 'X-Demo-User-ID: 40000000-0000-4000-8000-000000000001' \
+  http://localhost:8080/api/v1/products/10000000-0000-4000-8000-000000000001/queue/join
+```
+
+Публичная full-stack ссылка пока не опубликована. Production workflow и Compose разворачивают backend; frontend публикуется отдельным образом. Актуальные ограничения и короткий план доведения до сдачи — в [`docs/MISSING_BACKEND_METHODS.md`](docs/MISSING_BACKEND_METHODS.md).
 
 ## Команды
 
@@ -146,8 +175,9 @@ docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 api-1 
 
 - Нет Redis, Kafka, Kubernetes, настоящей авторизации, платежей и AI-интеграций.
 - Demo deployment работает по IPv4/HTTP; domain, DNS и TLS — отдельная задача.
-- Добавление доменной логики требует конкурентных интеграционных тестов на настоящем PostgreSQL.
-- Необязательные API-пробелы для поиска, глобального восстановления SSE-подписок и legacy checkout deep-link перечислены в [`docs/MISSING_BACKEND_METHODS.md`](docs/MISSING_BACKEND_METHODS.md).
+- Основной последовательный demo-path реализован, но обязательная матрица конкурентных FIFO/checkout-тестов на настоящем PostgreSQL ещё не закрыта полностью.
+- Production workflow разворачивает backend без публичного frontend и без единого балансирующего URL для двух API-реплик.
+- Поиск, глобальное восстановление SSE-подписок, load generator и остальные известные пробелы перечислены в [`docs/MISSING_BACKEND_METHODS.md`](docs/MISSING_BACKEND_METHODS.md).
 
 ## Использование ИИ
 
