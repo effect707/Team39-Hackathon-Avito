@@ -16,12 +16,13 @@
 
 ## Критично до финальной сдачи
 
-1. Добавить конкурентные PostgreSQL-тесты из Definition of Done: 100 join при 5 единицах, promotion номеров 6 и 7, два worker, checkout против expiry и конкурентный повтор payment callback.
+1. Добавить оставшиеся конкурентные PostgreSQL-тесты из Definition of Done: checkout против expiry и конкурентный повтор payment callback.
 2. Для публичного full-stack demo развернуть frontend отдельно и задать ему `VITE_API_URL`, либо добавить общий reverse proxy. Текущий production workflow автоматически разворачивает только backend.
 
 ## Подтверждённые проверки
 
-- `make verify` проходит полностью: форматирование, lint, Go unit/race, 64 frontend-теста, миграции/seed/constraints на временном PostgreSQL 17, OpenAPI/Compose validation и production builds;
+- `make verify` проходит полностью: форматирование, lint, Go unit/race, 64 frontend-теста, PostgreSQL integration, OpenAPI/Compose validation и production builds;
+- PostgreSQL integration запускает две API-реплики и два worker: 100 конкурентных join дают `5 GRANTED + 95 WAITING`, repeat join сохраняет заявку, expiry двух прав продвигает ticket 6 и 7 без двойного резерва;
 - `make smoke` собирает Compose, проверяет health/readiness обеих API-реплик и доступность `api-2` после остановки `api-1`;
 - ручной demo-path через разные API-реплики подтверждён: `GRANTED → CHECKOUT_PENDING → FAILED`, освободившаяся единица передана следующему `WAITING` с большим `ticket_no`;
 - расширенная конкурентная матрица должна фиксироваться отдельными PostgreSQL-тестами, чтобы результат был воспроизводим в CI.

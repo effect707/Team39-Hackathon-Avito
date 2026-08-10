@@ -97,7 +97,7 @@ curl -X POST \
 | `make lint` | golangci-lint, ESLint |
 | `make test` | Go unit и Vitest |
 | `make test-race` | Go race detector |
-| `make test-integration` | миграции/seed/constraints на чистом PostgreSQL 17 |
+| `make test-integration` | миграции/seed/constraints и конкурентный FIFO-сценарий на чистом PostgreSQL 17 |
 | `make build` | production Go и Vite builds |
 | `make smoke` | health/ready обеих API-реплик и доступность `api-2` после остановки `api-1` |
 | `make logs` | последние compose-логи |
@@ -175,7 +175,7 @@ docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 api-1 
 
 - Нет Redis, Kafka, Kubernetes, настоящей авторизации, платежей и AI-интеграций.
 - Demo deployment работает по IPv4/HTTP; domain, DNS и TLS — отдельная задача.
-- Основной последовательный demo-path реализован, но обязательная матрица конкурентных FIFO/checkout-тестов на настоящем PostgreSQL ещё не закрыта полностью.
+- Основной demo-path и конкурентный FIFO/promotion-сценарий реализованы, но обязательная матрица checkout/expiry/idempotency-тестов на настоящем PostgreSQL ещё не закрыта полностью.
 - Production workflow разворачивает backend без публичного frontend и без единого балансирующего URL для двух API-реплик.
 - Поиск, глобальное восстановление SSE-подписок, load generator и остальные известные пробелы перечислены в [`docs/MISSING_BACKEND_METHODS.md`](docs/MISSING_BACKEND_METHODS.md).
 
