@@ -79,9 +79,9 @@ describe("ItemDetailsPage", () => {
                 </Provider>,
             );
 
-        expect(screen.getByRole("timer")).toHaveTextContent("05:00");
-        expect(screen.queryByText("Можно приступать к оформлению")).not.toBeInTheDocument();
-        act(() => vi.advanceTimersByTime(1000));
+            expect(screen.getByRole("timer")).toHaveTextContent("05:00");
+            expect(screen.queryByText("Можно приступать к оформлению")).not.toBeInTheDocument();
+            act(() => vi.advanceTimersByTime(1000));
             expect(screen.getByRole("timer")).toHaveTextContent("04:59");
         } finally {
             vi.useRealTimers();

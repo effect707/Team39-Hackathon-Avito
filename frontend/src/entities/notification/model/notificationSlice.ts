@@ -9,7 +9,9 @@ interface NotificationStorage {
 
 const restoreStorage = (): NotificationStorage => {
     try {
-        const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<NotificationStorage> | null;
+        const value = JSON.parse(
+            localStorage.getItem(STORAGE_KEY) ?? "null",
+        ) as Partial<NotificationStorage> | null;
         return { byUser: value?.byUser ?? {}, dismissedByUser: value?.dismissedByUser ?? {} };
     } catch {
         return { byUser: {}, dismissedByUser: {} };
@@ -21,7 +23,11 @@ const persistStorage = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(st
 
 const notificationSlice = createSlice({
     name: "notifications",
-    initialState: { activeUserId: null as string | null, items: [] as AppNotification[], dismissedIds: [] as string[] },
+    initialState: {
+        activeUserId: null as string | null,
+        items: [] as AppNotification[],
+        dismissedIds: [] as string[],
+    },
     reducers: {
         notificationsHydrated(state, action: PayloadAction<string>) {
             storage = restoreStorage();
@@ -35,13 +41,16 @@ const notificationSlice = createSlice({
                 state.activeUserId !== userId ||
                 state.dismissedIds.includes(notification.id) ||
                 state.items.some((item) => item.id === notification.id)
-            ) return;
+            )
+                return;
             state.items.unshift(notification);
             storage.byUser[userId] = state.items.map((item) => ({ ...item }));
             persistStorage();
         },
         allNotificationsRead(state) {
-            state.items.forEach((item) => { item.read = true; });
+            state.items.forEach((item) => {
+                item.read = true;
+            });
             if (state.activeUserId) {
                 storage.byUser[state.activeUserId] = state.items.map((item) => ({ ...item }));
                 persistStorage();
@@ -62,7 +71,9 @@ const notificationSlice = createSlice({
                 persistStorage();
             }
             state.items = [];
-            state.dismissedIds = state.activeUserId ? [...(storage.dismissedByUser[state.activeUserId] ?? [])] : [];
+            state.dismissedIds = state.activeUserId
+                ? [...(storage.dismissedByUser[state.activeUserId] ?? [])]
+                : [];
         },
         notificationsReset(state) {
             state.activeUserId = null;

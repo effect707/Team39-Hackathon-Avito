@@ -49,7 +49,9 @@ export const QueueRealtime = () => {
             try {
                 const [state, product] = await Promise.all([
                     dispatch(
-                        queueApi.endpoints.getMyQueueState.initiate(productId, { forceRefetch: true }),
+                        queueApi.endpoints.getMyQueueState.initiate(productId, {
+                            forceRefetch: true,
+                        }),
                     ).unwrap(),
                     dispatch(
                         productApi.endpoints.getProduct.initiate(productId, { forceRefetch: true }),

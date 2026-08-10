@@ -22,7 +22,13 @@ export const QueueModal = ({
     const soldOut = state.status === "SOLD_OUT";
 
     return (
-        <Modal className={styles.modal} width={soldOut ? 760 : 500} open={open} footer={null} onCancel={onClose}>
+        <Modal
+            className={styles.modal}
+            width={soldOut ? 760 : 500}
+            open={open}
+            footer={null}
+            onCancel={onClose}
+        >
             <div className={styles.icon}>{soldOut ? <PackageX /> : <BellRing />}</div>
             <h2 className={styles.title}>{soldOut ? "Товар закончился" : "Вы в очереди"}</h2>
             {!soldOut && (

@@ -20,8 +20,14 @@ describe("notificationReducer", () => {
             read: false,
         };
         const hydrated = notificationReducer(undefined, notificationsHydrated("user-1"));
-        const once = notificationReducer(hydrated, notificationAdded({ userId: "user-1", notification }));
-        const twice = notificationReducer(once, notificationAdded({ userId: "user-1", notification }));
+        const once = notificationReducer(
+            hydrated,
+            notificationAdded({ userId: "user-1", notification }),
+        );
+        const twice = notificationReducer(
+            once,
+            notificationAdded({ userId: "user-1", notification }),
+        );
         expect(twice.items).toHaveLength(1);
     });
 

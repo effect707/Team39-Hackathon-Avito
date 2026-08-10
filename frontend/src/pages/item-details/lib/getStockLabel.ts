@@ -8,10 +8,10 @@ export const getStockLabel = (
     queueStatus: QueueEntryStatus | null,
     isLimited: boolean,
 ): string | null => {
-    if (available === 0 && reserved === 0) return "";
     if (isLimited && queueStatus === "PURCHASED") return null;
     if (available > 0) return `Доступно: ${available}`;
     if (total > 0 && sold === total) return "Все экземпляры оформлены";
     if (reserved > 0) return "Все экземпляры оформляются";
+    if (available === 0 && reserved === 0) return "";
     return "Товар закончился";
 };
