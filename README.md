@@ -29,6 +29,126 @@ Backend — модульный монолит на Go. PostgreSQL — единс
 
 API-реплики публикуются напрямую на разных портах, без прозрачной балансировки или failover одного URL. `/metrics` обслуживается отдельным listener на `:9090` только внутри compose-сети. SSE отдаётся Go API напрямую; событие лишь сигнализирует frontend перечитать REST-state.
 
+## Frontend
+
+### Технологии
+
+- **React 19 + TypeScript** — компонентный интерфейс и типизация моделей товаров, очереди, сессии и оплаты.
+- **Vite 8** — dev-сервер, production-сборка, proxy `/api` на backend и отдельный mock-режим.
+- **React Router 7** — маршрутизация между каталогом, карточкой товара, checkout, авторизацией и страницами ошибок.
+- **Redux Toolkit** — глобальное состояние приложения.
+- **RTK Query** — API-слой для товаров, очереди, checkout и demo-платежей.
+- **Ant Design** — кнопки, модальные окна, skeleton/loading-состояния, рейтинг и уведомления.
+- **Lucide React** — иконки таймера, статусов, геолокации, защиты очереди и результата оплаты.
+- **CSS Modules** — локальная стилизация страниц, виджетов и feature-компонентов.
+- **Roboto Variable и Inter** — шрифты через `@fontsource`.
+- **Server-Sent Events** — realtime-уведомления об изменении состояния очереди.
+- **Vitest + Testing Library** — unit-, компонентные и интеграционные тесты UI.
+- **ESLint + Prettier** — статический анализ и единое форматирование.
+- **Docker + Nginx** — production-сборка frontend и раздача статических файлов.
+
+### Архитектура frontend
+
+Frontend организован по принципам Feature-Sliced Design:
+
+```text
+src/
+├── app/          # запуск приложения, providers, router, store, realtime
+├── pages/        # страницы маршрутов
+├── widgets/      # крупные самостоятельные блоки интерфейса
+├── features/     # пользовательские сценарии
+├── entities/     # бизнес-сущности и их API/model/UI
+└── shared/       # общие API, UI, конфигурация и утилиты
+```
+
+- `app` инициализирует router, Redux Store, Ant Design и realtime-обработчики.
+- `pages` собирает экраны из сущностей, виджетов и features.
+- `widgets` содержит крупные блоки: header, footer, модальное окно очереди и уведомления.
+- `features` реализует вход в очередь, demo-оплату, авторизацию и realtime-подписку.
+- `entities` инкапсулирует предметные области `product`, `queue`, `grant`, `session` и `notification`.
+- `shared` содержит базовый API-клиент, маршруты, форматирование цены, общие состояния загрузки и ошибок.
+
+### Mock API
+
+Изначально frontend разрабатывался на Mock API, чтобы не ждать готовности backend и параллельно проверять каталог, карточку товара, вход и выход из очереди, статусы, персональное право, checkout, demo-оплату, истечение grant, уведомления и realtime-обновления. Mock-слой имитирует HTTP-запросы и ключевые backend-сценарии:
+
+- `frontend/mocks/mockBackend.ts` — имитация backend API;
+- `frontend/mocks/mockBaseQuery.ts` — адаптер mock-запросов под RTK Query;
+- `frontend/mocks/mockData.ts` — тестовые товары и пользователи;
+- `frontend/mocks/mockSse.ts` — имитация realtime-событий;
+- `frontend/mocks/config.ts` — выбор режима работы;
+- `frontend/mocks/configureMockApi.ts` — подключение Mock API.
+
+Основной пользовательский путь подключён к реальному backend API через `/api/v1`. Mock-режим сохранён для автономной разработки и демонстрации:
+
+```bash
+cd frontend
+npm run mockapi
+```
+
+Альтернативный способ включения:
+
+```bash
+VITE_API_MODE=mock npm run dev
+```
+
+В обычном режиме frontend всегда работает с backend. Ошибка или недоступность реального API не подменяется mock-данными автоматически: интеграционные проблемы остаются видимыми.
+
+### Особенности реализации
+
+- Состояние отслеживаемых товаров хранится отдельно для каждого demo-пользователя.
+- Сессия восстанавливается из `localStorage` по ключу `avito-fair-queue:session:v1`.
+- Redux listener реагирует на `signedIn` и `signedOut`, сбрасывает RTK Query state и обновляет пользовательские уведомления.
+- Идентификатор уведомления строится из товара, статуса и позиции/суффикса, что предотвращает дублирование событий.
+- Модальное окно очереди загружается через `React.lazy` только при необходимости.
+- Для `EXPIRED`, `PAYMENT_FAILED` и `SOLD_OUT` показываются альтернативные объявления.
+- Статус товара учитывает lifecycle и соотношение проданных единиц к общему остатку.
+- Backend остаётся источником истины: клиентский таймер и UI-решения не заменяют серверные проверки grant, TTL и checkout.
+- Пользовательские сообщения, действия и статусы отображаются на русском языке.
+- Для доступности используются `button`, `aria-label`, `role="timer"` и focus-состояния UI-компонентов.
+- Общие `ErrorState`, `Loader`, `Skeleton`, retry-действия и сообщения Ant Design покрывают loading/error-состояния.
+- В dev-режиме запросы к `/api` проксируются Vite на backend.
+
+### Ответственность frontend
+
+Frontend отвечает за каталог и карточки объявлений, альтернативы, demo-сессию, передачу demo-user ID, отображение и изменение состояния очереди, CTA для каждого состояния, позицию и ожидаемое время, grant и countdown, checkout и demo-оплату, SSE-подписку, уведомления, восстановление UI после reload/reconnect, loading/error/empty/terminal states, маршрутизацию, mock-режим, UI-тесты и production-сборку.
+
+Frontend не является источником истины для FIFO-порядка, фактической позиции, распределения товарной единицы, срока действия grant, допуска к checkout, продажи, защиты от oversell, конкурентного исхода expiry/payment callback и идемпотентности backend-операций.
+
+### Тестирование frontend
+
+Тесты покрывают Redux slices, API endpoints и invalidation, mock backend и конфигурацию, маршрутизацию, lazy loading, SSE-парсинг и подключение, countdown, позицию и время ожидания, CTA очереди, доступность checkout, режим заказа, форматирование цены, карточку и страницу товара, заказ, уведомления и demo-оплату.
+
+```bash
+cd frontend
+npm test
+npm run lint
+npm run format:check
+npm run build
+```
+
+<details>
+<summary>История разработки frontend</summary>
+
+| Коммит    | Дата       | Основные изменения                                                                                            |
+| --------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `b407a38` | 2026-08-06 | Runnable frontend skeleton, Dockerfile, Nginx, Vite, ESLint, тестовая инфраструктура и delivery pipeline      |
+| `7848984` | 2026-08-07 | FSD-структура, маршрутизация, базовые страницы, API/SSE-инфраструктура, shared UI и конфигурация инструментов |
+| `dea2467` | 2026-08-07 | Merge `main` в `FE-02`                                                                                        |
+| `5b6c3f0` | 2026-08-07 | FSD, маршрутизация, API/SSE, базовые состояния, линтер и форматтер                                            |
+| `6a0b56a` | 2026-08-07 | Форматирование CSS                                                                                            |
+| `632c0b7` | 2026-08-07 | Удаление устаревших файлов и переход к новой структуре                                                        |
+| `2253356` | 2026-08-07 | Исправление TypeScript-конфигурации                                                                           |
+| `ea449e9` | 2026-08-07 | Дополнительное исправление `tsconfig`                                                                         |
+| `a74d530` | 2026-08-07 | Исправление Dockerfile                                                                                        |
+| `1a6a7ce` | 2026-08-08 | Ant Design, header/footer, карточка товара и каталог                                                          |
+| `e464f73` | 2026-08-09 | Mock backend/SSE, тесты, FSD, авторизация, очередь, checkout, уведомления, страницы и стили                   |
+| `c431e61` | 2026-08-09 | Исправление теста и UI авторизации                                                                            |
+| `882115d` | 2026-08-10 | Реальный backend API, endpoints, модели, queue watch, SSE, Docker/Nginx и frontend README                     |
+| `81732cb` | 2026-08-10 | Merge `dev` в `FE-03`                                                                                         |
+
+</details>
+
 ## Локальный запуск
 
 Нужны Docker Engine с Compose plugin, Go 1.26.4, Node.js 22.14+ и npm 10.9+. Для `make lint` нужен `golangci-lint` 2.12.2:
@@ -67,13 +187,33 @@ Seed идемпотентен и создаёт:
 
 В demo-режиме бизнес-запросы передают UUID тестового пользователя только в `X-Demo-User-ID`. `user_id` в JSON не принимается. Для curl-сценариев можно использовать `40000000-0000-4000-8000-000000000001`.
 
-## Demo-сценарий
+## Demo-сценарии
 
-1. Откройте Fujifilm X100V и зарегистрируйте demo-пользователя — регистрация локальная и нужна только для UUID в `X-Demo-User-ID`.
-2. Нажмите «Встать в очередь». При свободной единственной единице пользователь сразу получает временное право.
-3. Во втором браузерном профиле войдите другим demo-пользователем и встаньте в очередь на тот же товар — он получит статус `WAITING`.
-4. Первый пользователь переходит к checkout и выбирает demo-результат: `success` завершает покупку, `failure` или `timeout` освобождает единицу.
-5. При освобождении или автоматическом истечении TTL worker продвигает минимальный `ticket_no`; SSE служит сигналом, после которого frontend перечитывает REST-state.
+### 1. Успешная покупка
+
+1. Откройте Fujifilm X100V и зарегистрируйте demo-пользователя. Регистрация локальная и нужна только для UUID в `X-Demo-User-ID`.
+2. Нажмите «Встать в очередь». При свободной единственной единице пользователь получает временное право со статусом `GRANTED`.
+3. До окончания countdown перейдите к checkout и выберите результат `success`.
+4. Убедитесь, что заявка перешла в `PURCHASED`, а единица больше не выдаётся другим пользователям.
+
+### 2. Строгий FIFO и передача единицы
+
+1. Откройте Fujifilm X100V в двух браузерных профилях и войдите под разными demo-пользователями.
+2. Первый пользователь встаёт в очередь и получает `GRANTED`; второй встаёт после него и получает `WAITING`.
+3. У первого пользователя выберите payment-результат `failure` или `timeout`. Единица освободится. Альтернативно дождитесь истечения TTL — grant освободит worker.
+4. Убедитесь, что право получает именно второй пользователь с минимальным `ticket_no`. SSE сигнализирует об изменении, после чего frontend перечитывает REST-state.
+
+### 3. Reload и reconnect
+
+1. Встаньте в очередь и запомните отображаемый статус.
+2. Перезагрузите страницу или кратковременно отключите сеть.
+3. После восстановления соединения убедитесь, что UI вернул состояние через REST, а повторные SSE-события не создали дубликаты уведомлений и не изменили FIFO-порядок.
+
+### 4. Автономная демонстрация frontend
+
+1. Не запуская backend, выполните `cd frontend && npm run mockapi`.
+2. Откройте `http://localhost:5173` и пройдите каталог, очередь, grant, checkout, demo-оплату и терминальные состояния.
+3. Используйте этот режим только для демонстрации UI: серверные FIFO, oversell и конкурентные гарантии проверяются в обычном режиме с PostgreSQL.
 
 Быстрая проверка backend без UI:
 
@@ -88,20 +228,20 @@ curl -X POST \
 
 ## Команды
 
-| Команда | Назначение |
-|---|---|
-| `make up` | собрать и запустить Compose |
-| `make down` | остановить без удаления данных |
-| `make seed` | повторно безопасно загрузить demo-товары |
-| `make fmt` | отформатировать Go и frontend |
-| `make lint` | golangci-lint, ESLint |
-| `make test` | Go unit и Vitest |
-| `make test-race` | Go race detector |
+| Команда                 | Назначение                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `make up`               | собрать и запустить Compose                                                    |
+| `make down`             | остановить без удаления данных                                                 |
+| `make seed`             | повторно безопасно загрузить demo-товары                                       |
+| `make fmt`              | отформатировать Go и frontend                                                  |
+| `make lint`             | golangci-lint, ESLint                                                          |
+| `make test`             | Go unit и Vitest                                                               |
+| `make test-race`        | Go race detector                                                               |
 | `make test-integration` | миграции/seed/constraints и конкурентный FIFO-сценарий на чистом PostgreSQL 17 |
-| `make build` | production Go и Vite builds |
-| `make smoke` | health/ready обеих API-реплик и доступность `api-2` после остановки `api-1` |
-| `make logs` | последние compose-логи |
-| `make verify` | format-check, lint, unit/race/integration, contracts/configs и builds |
+| `make build`            | production Go и Vite builds                                                    |
+| `make smoke`            | health/ready обеих API-реплик и доступность `api-2` после остановки `api-1`    |
+| `make logs`             | последние compose-логи                                                         |
+| `make verify`           | format-check, lint, unit/race/integration, contracts/configs и builds          |
 
 `make verify` не переформатирует исходники. Интеграционный тест использует отдельный compose-project и свой временный volume; общая локальная БД не очищается.
 
@@ -148,14 +288,14 @@ sudo AVITO_DEPLOY_SSH_PUBLIC_KEY='ssh-ed25519 AAAA...' bash deploy/scripts/boots
 
 В GitHub Environment `production` задайте:
 
-| Тип | Имя | Значение |
-|---|---|---|
-| secret | `DEPLOY_HOST` | IPv4 сервера |
-| secret | `DEPLOY_SSH_PRIVATE_KEY` | приватный ключ `avito-deploy` |
-| secret | `DEPLOY_KNOWN_HOSTS` | проверенная known-hosts строка сервера |
-| secret | `POSTGRES_PASSWORD` | 24–128 символов `A-Z`, `a-z`, `0-9`, `_`, `-` |
-| variable | `DEPLOY_USER` | `avito-deploy` |
-| variable | `DEPLOY_PATH` | `/opt/avito-fair-queue` |
+| Тип      | Имя                      | Значение                                      |
+| -------- | ------------------------ | --------------------------------------------- |
+| secret   | `DEPLOY_HOST`            | IPv4 сервера                                  |
+| secret   | `DEPLOY_SSH_PRIVATE_KEY` | приватный ключ `avito-deploy`                 |
+| secret   | `DEPLOY_KNOWN_HOSTS`     | проверенная known-hosts строка сервера        |
+| secret   | `POSTGRES_PASSWORD`      | 24–128 символов `A-Z`, `a-z`, `0-9`, `_`, `-` |
+| variable | `DEPLOY_USER`            | `avito-deploy`                                |
+| variable | `DEPLOY_PATH`            | `/opt/avito-fair-queue`                       |
 
 Fingerprint host key для `DEPLOY_KNOWN_HOSTS` нужно сверить через консоль хостера или другой доверенный канал; не принимайте непроверенный `ssh-keyscan` как доказательство подлинности.
 
