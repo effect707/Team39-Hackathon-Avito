@@ -13,6 +13,7 @@ interface HeaderProps {
     onSignOut: () => void;
     onNotificationRead: (notificationId: string) => void;
     onAllNotificationsRead: () => void;
+    onNotificationsClear: () => void;
 }
 
 export const Header = ({
@@ -21,6 +22,7 @@ export const Header = ({
     onSignOut,
     onNotificationRead,
     onAllNotificationsRead,
+    onNotificationsClear,
 }: HeaderProps) => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -60,6 +62,7 @@ export const Header = ({
                             items={notifications}
                             onNotificationRead={onNotificationRead}
                             onAllNotificationsRead={onAllNotificationsRead}
+                            onNotificationsClear={onNotificationsClear}
                         />
                         <Dropdown menu={{ items: menu }} trigger={["click"]}>
                             <Button

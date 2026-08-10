@@ -6,10 +6,14 @@ export const getQueueCta = (
     isLimited: boolean,
     isSoldOut: boolean,
     position?: number | null,
+    grantExpired = false,
 ) => {
     if (status === "SOLD_OUT" || isSoldOut) return { label: "Товар закончился", disabled: true };
     if (!isLimited) return { label: "Купить", disabled: false };
     if (status === null) return { label: "Купить", disabled: false };
+    if (grantExpired && (status === "GRANTED" || status === "CHECKOUT_PENDING")) {
+        return { label: "Купить", disabled: false };
+    }
 
     switch (status) {
         case "WAITING":

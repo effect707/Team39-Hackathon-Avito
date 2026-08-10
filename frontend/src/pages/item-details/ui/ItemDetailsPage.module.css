@@ -15,7 +15,9 @@
     position: absolute;
     z-index: 1;
     top: 10px;
-    right: -10px;
+    right: 10px;
+    box-sizing: border-box;
+    max-width: calc(100% - 20px);
     padding: 8px 12px;
     border-radius: 6px;
     color: white;
@@ -23,6 +25,7 @@
     font-size: 18px;
     font-weight: 600;
     line-height: 24px;
+    text-align: center;
 }
 .content h2 {
     margin: 48px 0 22px;
@@ -137,6 +140,17 @@
     margin: 16px 0 0;
     color: #666;
     line-height: 1.35;
+}
+.purchaseTimer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    color: #006f9c;
+    background: #e8f7ff;
+    font-weight: 600;
 }
 .seller {
     margin-top: 18px;

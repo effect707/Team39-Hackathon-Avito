@@ -1,5 +1,5 @@
 import { Badge, Button, Dropdown, Empty } from "antd";
-import { Bell, CheckCheck, CircleAlert, Clock3, MoveUp } from "lucide-react";
+import { Bell, CheckCheck, CircleAlert, Clock3, MoveUp, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { type AppNotification, type NotificationType } from "@/entities/notification";
 import { getItemDetailsPath } from "@/shared/config/routes";
@@ -17,12 +17,14 @@ interface NotificationsDropdownProps {
     items: AppNotification[];
     onNotificationRead: (notificationId: string) => void;
     onAllNotificationsRead: () => void;
+    onNotificationsClear: () => void;
 }
 
 export const NotificationsDropdown = ({
     items,
     onNotificationRead,
     onAllNotificationsRead,
+    onNotificationsClear,
 }: NotificationsDropdownProps) => {
     const navigate = useNavigate();
     const unread = items.filter((item) => !item.read).length;
@@ -34,9 +36,21 @@ export const NotificationsDropdown = ({
         <div className={styles.notifications}>
             <div className={styles.notificationsHead}>
                 <strong>Уведомления</strong>
-                <Button type="link" onClick={onAllNotificationsRead}>
-                    Прочитать все
-                </Button>
+                <span>
+                    <Button type="link" onClick={onAllNotificationsRead}>
+                        Прочитать все
+                    </Button>
+                    <Button
+                        type="text"
+                        danger
+                        disabled={items.length === 0}
+                        onClick={onNotificationsClear}
+                        aria-label="Очистить уведомления"
+                        title="Очистить уведомления"
+                    >
+                        <Trash2 size={17} />
+                    </Button>
+                </span>
             </div>
             {items.length === 0 ? (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Пока нет уведомлений" />

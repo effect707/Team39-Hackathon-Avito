@@ -1,5 +1,5 @@
 import { configureBaseQuery, backendQuery } from "@/shared/api/baseApi";
-import { isMockApi, shouldUseMockFallback } from "./config";
+import { isMockApi } from "./config";
 import { mockBaseQuery } from "./mockBaseQuery";
 
 export const configureMockApi = () => {
@@ -8,10 +8,5 @@ export const configureMockApi = () => {
         return;
     }
 
-    configureBaseQuery(async (args, api, extraOptions) => {
-        const result = await backendQuery(args, api, extraOptions);
-        return result.error && shouldUseMockFallback(result.error)
-            ? mockBaseQuery(args, api, extraOptions)
-            : result;
-    });
+    configureBaseQuery(backendQuery);
 };

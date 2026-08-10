@@ -15,8 +15,11 @@ npm run mockapi
 
 Переменные сборки:
 
-- `VITE_API_MODE=mock` — включить browser mock backend;
+- `VITE_API_MODE=mock` — явно включить browser mock backend;
 - `VITE_API_URL` — переопределить базовый URL, по умолчанию `/api/v1`.
+
+В обычном режиме frontend всегда использует backend. Если backend недоступен или возвращает
+ошибку, mock-данные автоматически не подставляются.
 
 Проверки:
 

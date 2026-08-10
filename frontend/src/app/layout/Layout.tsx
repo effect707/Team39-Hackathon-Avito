@@ -1,7 +1,12 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Outlet, useLocation } from "react-router";
 import { useAppDispatch, useAppSelector } from "@/app/providers";
-import { allNotificationsRead, notificationRead } from "@/entities/notification";
+import {
+    allNotificationsRead,
+    notificationRead,
+    notificationsCleared,
+    notificationsHydrated,
+} from "@/entities/notification";
 import { signedIn, signedOut } from "@/entities/session";
 import { Header } from "@/widgets/header";
 import styles from "./Layout.module.css";
@@ -25,6 +30,10 @@ export const Layout = () => {
         authMode === "sign-in" ||
         authMode === "sign-up";
 
+    useEffect(() => {
+        if (user) dispatch(notificationsHydrated(user.id));
+    }, [dispatch, user]);
+
     return (
         <div className={styles.layout}>
             <Header
@@ -33,6 +42,7 @@ export const Layout = () => {
                 onSignOut={() => dispatch(signedOut())}
                 onNotificationRead={(notificationId) => dispatch(notificationRead(notificationId))}
                 onAllNotificationsRead={() => dispatch(allNotificationsRead())}
+                onNotificationsClear={() => dispatch(notificationsCleared())}
             />
 
             <main className={styles.main}>

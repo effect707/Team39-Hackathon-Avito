@@ -47,6 +47,18 @@
 .stay {
     flex: 1;
 }
+.alternatives {
+    margin-top: 24px;
+}
+.alternatives h3 {
+    margin: 0 0 14px;
+    font-size: 18px;
+}
+.alternativesGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
 @media (max-width: 500px) {
     .modal :global(.ant-modal-content) {
         padding: 28px 22px;
@@ -56,5 +68,8 @@
     }
     .actions {
         flex-direction: column;
+    }
+    .alternativesGrid {
+        grid-template-columns: 1fr;
     }
 }

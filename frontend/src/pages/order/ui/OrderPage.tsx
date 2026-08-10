@@ -3,6 +3,7 @@ import { Button, Form, Input, Modal, Skeleton, message } from "antd";
 import { ArrowLeft, Clock3, Package, ShieldCheck } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import { useDispatch } from "react-redux";
+import { useAppSelector } from "@/app/providers";
 import { getItemDetailsPath } from "@/shared/config/routes";
 import { formatPrice } from "@/shared/lib/format/price";
 import { useGetProductQuery } from "@/entities/product";
@@ -29,21 +30,25 @@ const TimerNotification = ({
     seconds: number;
 }) => {
     const dispatch = useDispatch();
+    const userId = useAppSelector((state) => state.session.user?.id);
     useEffect(() => {
-        if (seconds > 0 && seconds <= 120) {
+        if (userId && seconds > 0 && seconds <= 120) {
             dispatch(
                 notificationAdded({
-                    id: `${productId}:warning:120`,
-                    productId,
-                    productTitle,
-                    type: "warning",
-                    title: "Осталось меньше двух минут",
-                    createdAt: new Date().toISOString(),
-                    read: false,
+                    userId,
+                    notification: {
+                        id: `${productId}:warning:120`,
+                        productId,
+                        productTitle,
+                        type: "warning",
+                        title: "Осталось меньше двух минут",
+                        createdAt: new Date().toISOString(),
+                        read: false,
+                    },
                 }),
             );
         }
-    }, [dispatch, productId, productTitle, seconds]);
+    }, [dispatch, productId, productTitle, seconds, userId]);
     return null;
 };
 
@@ -51,6 +56,7 @@ export const OrderPage = () => {
     const { productId = "", grantId = "" } = useParams();
     const navigate = useNavigate();
     const dispatch = useDispatch();
+    const userId = useAppSelector((state) => state.session.user?.id);
     const {
         data: queueState,
         isLoading,
@@ -66,6 +72,9 @@ export const OrderPage = () => {
     const [submitPayment, payment] = useSubmitDemoPaymentResultMutation();
     const [leaveQueue] = useLeaveQueueMutation();
     const [now, setNow] = useState(0);
+    const [paymentCountdown, setPaymentCountdown] = useState<ReturnType<
+        typeof getCountdown
+    > | null>(null);
     const [paymentOpen, setPaymentOpen] = useState(false);
     const [result, setResult] = useState<
         | { status: "idle" }
@@ -82,8 +91,12 @@ export const OrderPage = () => {
             window.clearInterval(timer);
         };
     }, [product?.isLimited]);
-    const countdown = getCountdown(queueState?.grant?.expires_at ?? "", now);
-    const isExpired = queueState?.status === "EXPIRED" || countdown.totalSeconds === 0;
+    const liveCountdown = getCountdown(queueState?.grant?.expires_at ?? "", now);
+    const countdown =
+        result.status === "success" && paymentCountdown ? paymentCountdown : liveCountdown;
+    const isExpired =
+        result.status !== "success" &&
+        (queueState?.status === "EXPIRED" || liveCountdown.totalSeconds === 0);
     useEffect(() => {
         if (product?.isLimited && queueState?.grant && countdown.totalSeconds === 0) void refetch();
     }, [countdown.totalSeconds, product?.isLimited, queueState?.grant, refetch]);
@@ -112,26 +125,36 @@ export const OrderPage = () => {
         result.status,
     ]);
     useEffect(() => {
-        if (!isExpired || !product) return;
+        if (!isExpired || !product || !userId) return;
         dispatch(
             notificationAdded({
-                id: `${product.id}:EXPIRED:EXPIRED`,
-                productId: product.id,
-                productTitle: product.title,
-                type: "expired",
-                title: "Время на покупку истекло",
-                createdAt: new Date().toISOString(),
-                read: false,
+                userId,
+                notification: {
+                    id: `${product.id}:EXPIRED:EXPIRED`,
+                    productId: product.id,
+                    productTitle: product.title,
+                    type: "expired",
+                    title: "Время на покупку истекло",
+                    createdAt: new Date().toISOString(),
+                    read: false,
+                },
             }),
         );
-    }, [dispatch, isExpired, product]);
+    }, [dispatch, isExpired, product, userId]);
     if (isLoading || (isFetching && !queueState) || !queueState || !product) {
         return <Skeleton active paragraph={{ rows: 12 }} />;
     }
-    if (queueState.status !== "EXPIRED" && queueState.grant?.id !== grantId) return null;
-    if (!isCheckoutAvailable(queueState.status) && !isExpired) return null;
+    if (
+        result.status === "idle" &&
+        queueState.status !== "EXPIRED" &&
+        queueState.grant?.id !== grantId
+    )
+        return null;
+    if (result.status === "idle" && !isCheckoutAvailable(queueState.status) && !isExpired)
+        return null;
     const openPayment = async () => {
         if (isExpired || countdown.totalSeconds === 0) return;
+        setPaymentCountdown(countdown);
         try {
             if (queueState.status === "GRANTED") await startCheckout(grantId).unwrap();
             setPaymentOpen(true);
@@ -152,7 +175,7 @@ export const OrderPage = () => {
                 selected === "success"
                     ? {
                           message: "Покупка подтверждена",
-                          next_action: "Открыть заказ",
+                          next_action: "",
                       }
                     : {
                           message: "Оплата не прошла, резерв освобождён",
@@ -271,7 +294,11 @@ export const OrderPage = () => {
                             htmlType="submit"
                             form="checkout-form"
                             loading={start.isLoading}
-                            disabled={isExpired || countdown.totalSeconds === 0}
+                            disabled={
+                                result.status === "success" ||
+                                isExpired ||
+                                countdown.totalSeconds === 0
+                            }
                         >
                             Перейти к оплате
                         </Button>

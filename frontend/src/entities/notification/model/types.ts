@@ -9,3 +9,8 @@ export interface AppNotification {
     createdAt: string;
     read: boolean;
 }
+
+export interface UserNotification {
+    userId: string;
+    notification: AppNotification;
+}
