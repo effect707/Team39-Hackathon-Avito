@@ -57,7 +57,7 @@ func run() error {
 
 	eventsHandler := events.NewHandler(hub)
 
-	router := httpapi.NewRouter(database.Checker{DB: db}).WithCORS(config.CORSAllowedOrigins)
+	router := httpapi.NewRouter(database.Checker{DB: db}, config.DemoEnabled).WithCORS(config.CORSAllowedOrigins)
 	products.RegisterRoutes(router, productHandler)
 	queue.RegisterRoutes(router, queueHandler)
 	events.RegisterRoutes(router, eventsHandler)
@@ -66,6 +66,13 @@ func run() error {
 	listener := events.NewListener(config.DatabaseURL, hub)
 	go listener.Run(ctx)
 
-	slog.Info("api started", "address", config.HTTPAddress)
-	return server.Run(ctx, config.HTTPAddress, router)
+	slog.Info("api started", "http_address", config.HTTPAddress, "metrics_address", config.MetricsAddress)
+	return server.RunAll(
+		ctx,
+		server.Endpoint{
+			Address: config.HTTPAddress,
+			Handler: router,
+		},
+		server.Endpoint{Address: config.MetricsAddress, Handler: httpapi.NewMetricsHandler()},
+	)
 }

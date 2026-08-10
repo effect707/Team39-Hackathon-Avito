@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Checker interface {
@@ -22,6 +21,7 @@ type Router struct {
 	mux                *http.ServeMux
 	corsAllowedOrigins map[string]bool
 	corsAllowAnyOrigin bool
+	demoEnabled        bool
 }
 
 type contextKey string
@@ -29,11 +29,14 @@ type contextKey string
 const demoUserIDKey contextKey = "demo-user-id"
 const readinessTimeout = 2 * time.Second
 
-func NewRouter(checker Checker) *Router {
-	router := &Router{mux: http.NewServeMux(), corsAllowedOrigins: make(map[string]bool)}
+func NewRouter(checker Checker, demoEnabled ...bool) *Router {
+	enabled := true
+	if len(demoEnabled) > 0 {
+		enabled = demoEnabled[0]
+	}
+	router := &Router{mux: http.NewServeMux(), corsAllowedOrigins: make(map[string]bool), demoEnabled: enabled}
 	router.Handle("GET /api/v1/health", healthHandler)
 	router.Handle("GET /api/v1/ready", readyHandler(checker))
-	router.mux.Handle("GET /metrics", promhttp.Handler())
 	return router
 }
 
@@ -56,6 +59,14 @@ func (router *Router) Handle(pattern string, handler http.HandlerFunc) {
 }
 
 func (router *Router) HandleAuth(pattern string, handler http.HandlerFunc) {
+	router.mux.Handle(pattern, demoAuth(handler))
+}
+
+func (router *Router) HandleDemo(pattern string, handler http.HandlerFunc) {
+	if !router.demoEnabled {
+		router.mux.HandleFunc(pattern, notFound)
+		return
+	}
 	router.mux.Handle(pattern, demoAuth(handler))
 }
 
@@ -247,6 +258,10 @@ func WriteError(writer http.ResponseWriter, request *http.Request, status int, c
 
 func WriteJSON(writer http.ResponseWriter, status int, body any) {
 	writeJSON(writer, status, body)
+}
+
+func notFound(writer http.ResponseWriter, request *http.Request) {
+	writeError(writer, request, http.StatusNotFound, "NOT_FOUND", "Маршрут недоступен")
 }
 
 func writeError(writer http.ResponseWriter, request *http.Request, status int, code, message string) {

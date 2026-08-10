@@ -33,6 +33,8 @@ func Load() (Config, error) {
 
 func (cfg Config) validate() error {
 	switch {
+	case cfg.MetricsAddress == cfg.HTTPAddress:
+		return fmt.Errorf("METRICS_ADDRESS must differ from HTTP_ADDRESS")
 	case cfg.WorkerInterval <= 0:
 		return fmt.Errorf("WORKER_INTERVAL must be positive, got %s", cfg.WorkerInterval)
 	case cfg.GrantTTL <= 0:

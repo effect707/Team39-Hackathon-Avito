@@ -150,17 +150,52 @@ func TestDomainEndpointsRequireDemoIdentityAndPropagateIt(t *testing.T) {
 	})
 }
 
-func TestMetricsIsAvailableAtInternalMetricsPath(t *testing.T) {
-	router := NewRouter(checkerFunc(func(context.Context) error { return nil }))
+func TestPublicRouterDoesNotExposeMetrics(t *testing.T) {
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), true)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil))
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
 	}
-	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/plain") {
+	if got := rec.Body.String(); !strings.Contains(got, `"code":"NOT_FOUND"`) {
+		t.Errorf("body = %q, want JSON not-found error envelope", got)
+	}
+}
+
+func TestDemoRouteIsUnavailableWhenDemoModeIsDisabled(t *testing.T) {
+	router := NewRouter(checkerFunc(func(context.Context) error { return nil }), false)
+	router.HandleDemo("POST /api/v1/demo/probe", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusNoContent)
+	})
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/demo/probe", nil)
+	req.Header.Set("X-Demo-User-ID", "40000000-0000-4000-8000-000000000001")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestMetricsHandlerServesPrometheusMetrics(t *testing.T) {
+	recorder := httptest.NewRecorder()
+
+	NewMetricsHandler().ServeHTTP(
+		recorder,
+		httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil),
+	)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", recorder.Code)
+	}
+	if got := recorder.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/plain") {
 		t.Errorf("Content-Type = %q, want Prometheus text format", got)
+	}
+	if got := recorder.Body.String(); !strings.Contains(got, "# HELP go_gc_duration_seconds") {
+		t.Errorf("body does not contain Go runtime metrics")
 	}
 }
 

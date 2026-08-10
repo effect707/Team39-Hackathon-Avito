@@ -132,6 +132,16 @@ func TestLoadOverridesEveryField(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsSharedHTTPAndMetricsAddress(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://queue:queue@localhost:5432/queue?sslmode=disable")
+	t.Setenv("HTTP_ADDRESS", ":8080")
+	t.Setenv("METRICS_ADDRESS", ":8080")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want distinct listener validation error")
+	}
+}
+
 func TestLoadDisablesDemoMiddleware(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://queue:queue@localhost:5432/queue?sslmode=disable")
 	t.Setenv("DEMO_MODE", "false")
