@@ -16,8 +16,7 @@ export const subscribe = ({ productId, userId, onSignal, onConnectionChange }: S
     let connecting = false;
 
     const connect = async () => {
-        if (stopped || !navigator.onLine || connecting)
-            return;
+        if (stopped || !navigator.onLine || connecting) return;
 
         connecting = true;
         try {
