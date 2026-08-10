@@ -7,9 +7,13 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/team39/avito-fair-queue/backend/internal/allocation"
+	"github.com/team39/avito-fair-queue/backend/internal/events"
 	"github.com/team39/avito-fair-queue/backend/internal/platform/config"
 	"github.com/team39/avito-fair-queue/backend/internal/platform/database"
 	"github.com/team39/avito-fair-queue/backend/internal/platform/worker"
+	"github.com/team39/avito-fair-queue/backend/internal/products"
+	"github.com/team39/avito-fair-queue/backend/internal/queue"
 )
 
 func main() {
@@ -31,6 +35,26 @@ func run() error {
 		return err
 	}
 	defer func() { _ = database.Close(db) }()
+
+	notifier := events.NewNotifier()
+	allocationService := allocation.NewService(
+		db,
+		allocation.NewRepository(db),
+		products.NewRepository(db),
+		queue.NewRepository(db),
+		notifier,
+		config.GrantTTL,
+	)
+
 	slog.Info("worker started", "interval", config.WorkerInterval)
-	return worker.Run(ctx, config.WorkerInterval, func(context.Context) error { return nil })
+	return worker.Run(ctx, config.WorkerInterval, func(ctx context.Context) error {
+		expired, err := allocationService.ExpireExpiredGrants(ctx)
+		if err != nil {
+			return err
+		}
+		if expired > 0 {
+			slog.Info("expired grants", "count", expired)
+		}
+		return nil
+	})
 }
