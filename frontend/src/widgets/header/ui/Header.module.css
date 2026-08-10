@@ -1,0 +1,156 @@
+.header {
+    width: 100%;
+    background: #ffffff;
+}
+
+.container {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 14px 24px;
+}
+
+.logo {
+    height: 30px;
+}
+.userActions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.iconButton,
+.avatarButton {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+}
+.notifications {
+    width: min(390px, calc(100vw - 24px));
+    max-height: 520px;
+    overflow-y: auto;
+    padding: 8px;
+    border-radius: 20px;
+    background: white;
+    box-shadow: 0 14px 48px #0003;
+}
+.notificationsHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 10px 12px;
+}
+.notificationsHead strong {
+    font-size: 21px;
+}
+.notification {
+    position: relative;
+    width: 100%;
+    border: 0;
+    color: inherit;
+    text-align: left;
+    display: grid;
+    grid-template-columns: 42px 1fr 8px;
+    gap: 11px;
+    padding: 14px 10px;
+    border-top: 1px solid #eee;
+    background: transparent;
+    cursor: pointer;
+}
+.notification:hover,
+.notification:focus-visible {
+    background: #f7f7f7;
+}
+.notificationIcon {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    color: #00aaff;
+    background: #e8f7ff;
+}
+.notification strong {
+    display: block;
+}
+.notification p {
+    margin: 3px 0;
+    color: #555;
+}
+.notification time {
+    color: #999;
+    font-size: 12px;
+}
+.unread {
+    width: 7px;
+    height: 7px;
+    margin-top: 7px;
+    border-radius: 50%;
+    background: #00aaff;
+}
+
+@media (max-width: 720px) {
+    .container {
+        gap: 12px;
+        padding-inline: 16px;
+    }
+    .search {
+        order: 3;
+        flex-basis: 100%;
+    }
+    .container {
+        flex-wrap: wrap;
+    }
+    .searchButton {
+        display: none;
+    }
+    .authButton {
+        margin-left: auto;
+        font-size: 0;
+    }
+}
+
+.authButton {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    height: 52px;
+    padding-inline: 12px;
+    font-size: 16px;
+    font-weight: 500;
+    color: #000000;
+}
+
+.search {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    height: 52px;
+    background: #00aaff;
+    border-radius: 14px;
+}
+
+.searchInput {
+    border: 2px solid #00aaff;
+    border-right: 0;
+    border-radius: 14px;
+}
+
+.searchInput:hover,
+.searchInput:focus,
+.searchInput:focus-within {
+    border-color: #00aaff;
+}
+
+.searchButton {
+    background: #00aaff;
+    height: 52px;
+    padding-inline: 24px;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 500;
+}

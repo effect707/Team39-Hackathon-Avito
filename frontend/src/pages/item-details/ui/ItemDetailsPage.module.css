@@ -1,0 +1,249 @@
+.page {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) 300px 340px;
+    gap: 28px;
+    padding-block: 30px 64px;
+    align-items: start;
+}
+.content h1 {
+    max-width: 800px;
+    margin: 0 0 26px;
+    line-height: 1.02;
+    letter-spacing: -1.2px;
+}
+.limitedBadge {
+    position: absolute;
+    z-index: 1;
+    top: 10px;
+    right: -10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    color: white;
+    background: red;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 24px;
+}
+.content h2 {
+    margin: 48px 0 22px;
+}
+.gallery {
+    width: 100%;
+    max-width: 820px;
+}
+.hero {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 570px;
+    overflow: hidden;
+    border-radius: 18px;
+    background: #f2f2f2;
+}
+.hero img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 18px;
+    object-fit: contain;
+}
+.thumbnails {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    overflow-x: auto;
+}
+.thumbnails button {
+    width: 92px;
+    height: 76px;
+    flex: 0 0 auto;
+    padding: 0;
+    overflow: hidden;
+    border: 3px solid transparent;
+    border-radius: 12px;
+    background: #f2f2f2;
+    cursor: pointer;
+}
+.thumbnails .activeThumb {
+    border-color: #00aaff;
+}
+.thumbnails img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.characteristics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 42px;
+    max-width: 760px;
+    margin: 0;
+}
+.characteristics div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.characteristics dt {
+    color: #858585;
+}
+.characteristics dd {
+    margin: 0;
+}
+.description {
+    max-width: 720px;
+    font-size: 18px;
+    line-height: 1.55;
+}
+.location {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-weight: 600;
+}
+.purchase,
+.queueInfo {
+    position: sticky;
+    top: 24px;
+}
+.purchaseCard,
+.seller,
+.queueCard {
+    padding: 24px;
+    border: 1px solid #ebebeb;
+    border-radius: 22px;
+    background: #fff;
+    box-shadow: 0 8px 28px #0000000d;
+}
+.price {
+    font-size: 34px;
+    font-weight: 750;
+}
+.stock {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 16px 0 20px;
+    color: #555;
+}
+.cta {
+    width: 100%;
+    height: 54px;
+    border-radius: 14px;
+    font-size: 17px;
+}
+.stateMessage {
+    margin: 16px 0 0;
+    color: #666;
+    line-height: 1.35;
+}
+.seller {
+    margin-top: 18px;
+}
+.seller span {
+    color: #888;
+}
+.seller h3 {
+    margin: 8px 0 10px;
+    font-size: 21px;
+}
+.seller b {
+    margin-left: 8px;
+}
+.queueCard {
+    background: #f5faff;
+    box-shadow: none;
+}
+.queueIcon {
+    display: grid;
+    place-items: center;
+    width: 50px;
+    height: 50px;
+    border-radius: 15px;
+    color: #00aaff;
+    background: white;
+}
+.queueCard h2 {
+    margin: 18px 0 12px;
+    font-size: 25px;
+}
+.queueCard p {
+    color: #555;
+    line-height: 1.45;
+}
+.queueCard ul {
+    display: grid;
+    gap: 14px;
+    padding: 0;
+    list-style: none;
+}
+.queueCard li {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+}
+.alternatives {
+    grid-column: 1 / -1;
+    margin-top: 20px;
+}
+.alternatives h2 {
+    margin: 0 0 20px;
+}
+.alternativesGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 24px;
+}
+
+@media (max-width: 1120px) {
+    .page {
+        grid-template-columns: minmax(0, 1fr) 320px;
+    }
+    .queueInfo {
+        grid-column: 2;
+        position: static;
+    }
+}
+@media (max-width: 760px) {
+    .page {
+        display: flex;
+        flex-direction: column;
+        padding-top: 20px;
+    }
+    .content,
+    .purchase,
+    .queueInfo {
+        width: 100%;
+    }
+    .purchase {
+        position: static;
+        order: 2;
+    }
+    .content {
+        display: contents;
+    }
+    .content h1,
+    .gallery {
+        order: 1;
+    }
+    .content h2,
+    .characteristics,
+    .description,
+    .location {
+        order: 3;
+    }
+    .queueInfo {
+        order: 4;
+    }
+    .alternatives {
+        width: 100%;
+        order: 5;
+    }
+    .hero {
+        height: min(105vw, 500px);
+    }
+    .characteristics {
+        grid-template-columns: 1fr;
+    }
+}

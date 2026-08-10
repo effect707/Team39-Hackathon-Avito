@@ -2,7 +2,7 @@
 
 Хакатонный MVP строгой FIFO-очереди перед checkout для дефицитных товаров. Backend выдаёт временное персональное право на покупку, а после отказа, payment failure или истечения TTL передаёт единицу следующему участнику.
 
-Сейчас backend walking skeleton запускает PostgreSQL 17, SQL-migrator, worker и две API-реплики. Доменные queue/allocation/checkout handlers пока стабированы ответом `501 NOT_IMPLEMENTED` и зарегистрированы по фиксированному OpenAPI-контракту. Frontend собирается и публикуется отдельно, но не входит в backend Compose.
+Backend Compose запускает PostgreSQL 17, SQL-migrator, worker и две API-реплики с реальными product/queue/SSE/checkout endpoints. React frontend собирается и запускается отдельно, по умолчанию обращается к backend API, а browser mock включается только явным frontend-режимом.
 
 ## Источники истины
 
@@ -144,10 +144,10 @@ docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 api-1 
 
 ## Ограничения MVP
 
-- FIFO/allocation/checkout/SSE business logic ещё не подключены: их endpoints возвращают стаб `501`.
 - Нет Redis, Kafka, Kubernetes, настоящей авторизации, платежей и AI-интеграций.
 - Demo deployment работает по IPv4/HTTP; domain, DNS и TLS — отдельная задача.
 - Добавление доменной логики требует конкурентных интеграционных тестов на настоящем PostgreSQL.
+- Необязательные API-пробелы для поиска, глобального восстановления SSE-подписок и legacy checkout deep-link перечислены в [`docs/MISSING_BACKEND_METHODS.md`](docs/MISSING_BACKEND_METHODS.md).
 
 ## Использование ИИ
 
