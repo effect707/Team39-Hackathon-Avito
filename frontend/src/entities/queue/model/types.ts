@@ -45,7 +45,13 @@ export interface PaymentResultRequest {
 }
 
 export interface PaymentResultResponse {
-    queue_state: QueueState;
+    grant: Grant;
+    idempotency_key: string;
+    already_processed: boolean;
+}
+
+export interface CheckoutStartedResponse {
+    grant: Grant;
 }
 
 export interface ErrorEnvelope {

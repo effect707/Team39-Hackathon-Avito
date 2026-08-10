@@ -1,4 +1,5 @@
 export type {
+    CheckoutStartedResponse,
     ErrorEnvelope,
     Grant,
     GrantStatus,
@@ -11,7 +12,6 @@ export type {
 export {
     queueApi,
     useGetMyQueueStateQuery,
-    useGetQueueByGrantQuery,
     useJoinQueueMutation,
     useLeaveQueueMutation,
     useStartCheckoutMutation,

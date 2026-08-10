@@ -17,6 +17,10 @@ Object.defineProperty(window, "matchMedia", {
     }),
 });
 
+const apiMocks = vi.hoisted(() => ({
+    queueByProductQuery: vi.fn(),
+}));
+
 const expiredQueueState = {
     queue_entry_id: "entry-1",
     product_id: "grimilde",
@@ -34,13 +38,14 @@ const expiredQueueState = {
     },
 };
 
+apiMocks.queueByProductQuery.mockReturnValue({
+    data: expiredQueueState,
+    isLoading: false,
+    isFetching: false,
+    refetch: vi.fn(),
+});
 vi.mock("@/entities/queue", () => ({
-    useGetQueueByGrantQuery: () => ({
-        data: expiredQueueState,
-        isLoading: false,
-        isFetching: false,
-        refetch: vi.fn(),
-    }),
+    useGetMyQueueStateQuery: apiMocks.queueByProductQuery,
     useGetProductQuery: () => ({ data: mockProducts[1] }),
     useStartCheckoutMutation: () => [vi.fn(), { isLoading: false }],
     useSubmitDemoPaymentResultMutation: () => [vi.fn(), { isLoading: false }],
@@ -61,15 +66,19 @@ describe("OrderPage", () => {
         render(
             <Provider store={store}>
                 <AntdProvider>
-                    <MemoryRouter initialEntries={["/checkout/grant-1"]}>
+                    <MemoryRouter initialEntries={["/checkout/grimilde/grant-1"]}>
                         <Routes>
-                            <Route path="/checkout/:grantId" element={<OrderPage />} />
+                            <Route path="/checkout/:productId/:grantId" element={<OrderPage />} />
                             <Route path="/" element={<Location />} />
                         </Routes>
                     </MemoryRouter>
                 </AntdProvider>
             </Provider>,
         );
+
+        expect(apiMocks.queueByProductQuery).toHaveBeenCalledWith("grimilde", {
+            refetchOnMountOrArgChange: true,
+        });
 
         expect(await screen.findByRole("button", { name: "Перейти к оплате" })).toBeDisabled();
         expect(

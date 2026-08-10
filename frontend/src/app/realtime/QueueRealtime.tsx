@@ -8,7 +8,8 @@ import type { QueueState } from "@/entities/queue";
 import { subscribe } from "@/features/queue-realtime";
 import { isMockApi } from "@mocks/config";
 import { subscribeMock } from "@mocks/mockSse";
-import { mockBackend } from "@mocks/mockBackend";
+
+const noProducts: string[] = [];
 
 const notificationFor = (state: QueueState, title: string) => {
     const suffix = state.status === "WAITING" ? state.position : state.status;
@@ -36,13 +37,15 @@ const notificationFor = (state: QueueState, title: string) => {
 
 export const QueueRealtime = () => {
     const user = useAppSelector((state) => state.session.user);
+    const products = useAppSelector((state) =>
+        user ? (state.queueWatch.byUser[user.id] ?? noProducts) : noProducts,
+    );
     const dispatch = useAppDispatch();
     const { message } = App.useApp();
     const subscribeToQueue = isMockApi ? subscribeMock : subscribe;
 
     useEffect(() => {
         if (!user) return;
-        const products = mockBackend.knownQueues();
         const cleanups = products.map((productId) =>
             subscribeToQueue({
                 productId,
@@ -52,30 +55,38 @@ export const QueueRealtime = () => {
                         dispatch(queueApi.util.invalidateTags([{ type: "Queue", id: productId }]));
                 },
                 onSignal: async () => {
-                    dispatch(
-                        queueApi.util.invalidateTags([
-                            { type: "Queue", id: productId },
-                            { type: "Product", id: productId },
-                        ]),
-                    );
-                    const state = await dispatch(
-                        queueApi.endpoints.getMyQueueState.initiate(productId, {
-                            forceRefetch: true,
-                        }),
-                    ).unwrap();
-                    const product = await dispatch(
-                        productApi.endpoints.getProduct.initiate(productId, { forceRefetch: true }),
-                    ).unwrap();
-                    if (state) {
-                        const item = notificationFor(state, product.title);
-                        dispatch(notificationAdded(item));
-                        message.info(`${item.title}: ${product.title}`);
+                    try {
+                        dispatch(
+                            queueApi.util.invalidateTags([
+                                { type: "Queue", id: productId },
+                                { type: "Product", id: productId },
+                            ]),
+                        );
+                        const [state, product] = await Promise.all([
+                            dispatch(
+                                queueApi.endpoints.getMyQueueState.initiate(productId, {
+                                    forceRefetch: true,
+                                }),
+                            ).unwrap(),
+                            dispatch(
+                                productApi.endpoints.getProduct.initiate(productId, {
+                                    forceRefetch: true,
+                                }),
+                            ).unwrap(),
+                        ]);
+                        if (state) {
+                            const item = notificationFor(state, product.title);
+                            dispatch(notificationAdded(item));
+                            message.info(`${item.title}: ${product.title}`);
+                        }
+                    } catch {
+                        return;
                     }
                 },
             }),
         );
         return () => cleanups.forEach((cleanup) => cleanup());
-    }, [dispatch, message, subscribeToQueue, user]);
+    }, [dispatch, message, products, subscribeToQueue, user]);
 
     return null;
 };

@@ -1,8 +1,9 @@
 import "@testing-library/jest-dom/vitest";
 import { webcrypto } from "node:crypto";
-import { configureMockApi } from "@mocks/configureMockApi";
+import { configureBaseQuery } from "@/shared/api/baseApi";
+import { mockBaseQuery } from "@mocks/mockBaseQuery";
 
-configureMockApi();
+configureBaseQuery(mockBaseQuery);
 
 class ResizeObserverMock {
     observe() {

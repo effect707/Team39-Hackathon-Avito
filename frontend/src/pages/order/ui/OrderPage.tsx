@@ -9,7 +9,7 @@ import { useGetProductQuery } from "@/entities/product";
 import { getCountdown } from "@/entities/grant";
 import { notificationAdded } from "@/entities/notification";
 import {
-    useGetQueueByGrantQuery,
+    useGetMyQueueStateQuery,
     useLeaveQueueMutation,
     useStartCheckoutMutation,
     useSubmitDemoPaymentResultMutation,
@@ -48,17 +48,18 @@ const TimerNotification = ({
 };
 
 export const OrderPage = () => {
-    const { grantId = "" } = useParams();
+    const { productId = "", grantId = "" } = useParams();
     const navigate = useNavigate();
     const dispatch = useDispatch();
     const {
         data: queueState,
         isLoading,
         isFetching,
+        isError: isQueueError,
         refetch,
-    } = useGetQueueByGrantQuery(grantId, { refetchOnMountOrArgChange: true });
-    const { data: product } = useGetProductQuery(queueState?.product_id ?? "", {
-        skip: !queueState,
+    } = useGetMyQueueStateQuery(productId, { refetchOnMountOrArgChange: true });
+    const { data: product } = useGetProductQuery(productId, {
+        skip: !productId,
     });
     const orderMode = getOrderMode(product?.isLimited ?? false);
     const [startCheckout, start] = useStartCheckoutMutation();
@@ -88,14 +89,28 @@ export const OrderPage = () => {
     }, [countdown.totalSeconds, product?.isLimited, queueState?.grant, refetch]);
     useEffect(() => {
         if (
+            paymentOpen ||
+            result.status !== "idle" ||
+            isLoading ||
             isFetching ||
-            !queueState ||
-            isCheckoutAvailable(queueState.status) ||
-            queueState.status === "EXPIRED"
+            (queueState?.status === "EXPIRED" && !isQueueError) ||
+            (queueState &&
+                isCheckoutAvailable(queueState.status) &&
+                queueState.grant?.id === grantId)
         )
             return;
-        navigate(`/items/${queueState.product_id}`, { replace: true });
-    }, [isFetching, navigate, queueState]);
+        navigate(getItemDetailsPath(productId), { replace: true });
+    }, [
+        grantId,
+        isFetching,
+        isLoading,
+        isQueueError,
+        navigate,
+        paymentOpen,
+        productId,
+        queueState,
+        result.status,
+    ]);
     useEffect(() => {
         if (!isExpired || !product) return;
         dispatch(
@@ -110,9 +125,10 @@ export const OrderPage = () => {
             }),
         );
     }, [dispatch, isExpired, product]);
-    if (isLoading || isFetching || !queueState || !product) {
+    if (isLoading || (isFetching && !queueState) || !queueState || !product) {
         return <Skeleton active paragraph={{ rows: 12 }} />;
     }
+    if (queueState.status !== "EXPIRED" && queueState.grant?.id !== grantId) return null;
     if (!isCheckoutAvailable(queueState.status) && !isExpired) return null;
     const openPayment = async () => {
         if (isExpired || countdown.totalSeconds === 0) return;
@@ -127,15 +143,26 @@ export const OrderPage = () => {
     const chooseResult = async (selected: "success" | "failure" | "timeout") => {
         try {
             idempotencyKey.current ??= crypto.randomUUID();
-            const response = await submitPayment({
+            await submitPayment({
                 grantId,
                 request: { idempotency_key: idempotencyKey.current, result: selected },
             }).unwrap();
+            const nextState = await refetch().unwrap();
+            const fallback =
+                selected === "success"
+                    ? {
+                          message: "Покупка подтверждена",
+                          next_action: "Открыть заказ",
+                      }
+                    : {
+                          message: "Оплата не прошла, резерв освобождён",
+                          next_action: "Встать в конец очереди или открыть аналоги",
+                      };
             setPaymentOpen(false);
             setResult({
                 status: selected,
-                message: response.queue_state.message,
-                nextAction: response.queue_state.next_action,
+                message: nextState?.message ?? fallback.message,
+                nextAction: nextState?.next_action ?? fallback.next_action,
             });
         } catch {
             message.error("Не удалось получить результат оплаты. Повторите попытку.");

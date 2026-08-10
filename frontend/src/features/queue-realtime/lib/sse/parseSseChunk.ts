@@ -4,6 +4,12 @@ export const parseSseChunk = (chunk: string): { signals: SSESignal[]; rest: stri
     const blocks = chunk.replace(/\r\n?/g, "\n").split("\n\n");
     const rest = blocks.pop() ?? "";
     const signals = blocks.flatMap((block) => {
+        const event = block
+            .split("\n")
+            .find((line) => line.startsWith("event:"))
+            ?.slice(6)
+            .trim();
+        if (event !== "queue.changed") return [];
         const data = block
             .split("\n")
             .filter((line) => line.startsWith("data:"))
@@ -11,8 +17,8 @@ export const parseSseChunk = (chunk: string): { signals: SSESignal[]; rest: stri
             .join("\n");
         if (!data) return [];
         try {
-            const signal = JSON.parse(data) as SSESignal;
-            return signal.type === "queue.changed" ? [signal] : [];
+            const signal = JSON.parse(data) as Omit<SSESignal, "type">;
+            return [{ ...signal, type: "queue.changed" as const }];
         } catch {
             return [];
         }

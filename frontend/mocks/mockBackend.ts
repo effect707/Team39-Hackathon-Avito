@@ -4,7 +4,6 @@ import type { StoredUser } from "@/entities/session";
 import { mockProducts } from "./mockData";
 
 const DB_KEY = "avito-hackathon-queue:mock:v2";
-const KNOWN_QUEUES_KEY = "avito-hackathon-queue:known:v1";
 
 interface MockDatabase {
     version: 2;
@@ -205,7 +204,6 @@ export const mockBackend = {
 
         database.queues[key] = state;
         writeDatabase(database);
-        mockBackend.rememberQueue(productId);
         return state;
     },
 
@@ -217,21 +215,6 @@ export const mockBackend = {
         const state = expireGrantIfNeeded(database, key, current);
         if (state !== current) {
             promoteWaitingEntries(database, productId);
-            writeDatabase(database);
-        }
-        return state;
-    },
-
-    findQueueByGrant: async (userId: string, grantId: string): Promise<QueueState | null> => {
-        const database = readDatabase();
-        const entry = Object.entries(database.queues).find(
-            ([key, state]) => key.startsWith(`${userId}:`) && state.grant?.id === grantId,
-        );
-        if (!entry) return null;
-        const [key, current] = entry;
-        const state = expireGrantIfNeeded(database, key, current);
-        if (state !== current) {
-            promoteWaitingEntries(database, current.product_id);
             writeDatabase(database);
         }
         return state;
@@ -253,7 +236,6 @@ export const mockBackend = {
         database.queues[key] = next;
         if (current.grant) promoteWaitingEntries(database, productId);
         writeDatabase(database);
-        mockBackend.forgetQueue(productId);
         return next;
     },
 
@@ -291,7 +273,7 @@ export const mockBackend = {
     ): Promise<PaymentResultResponse> => {
         const database = readDatabase();
         const previous = database.paymentResults[request.idempotency_key];
-        if (previous) return previous;
+        if (previous) return { ...previous, already_processed: true };
         const entry = Object.entries(database.queues).find(
             ([key, state]) => key.startsWith(`${userId}:`) && state.grant?.id === grantId,
         );
@@ -343,25 +325,13 @@ export const mockBackend = {
             };
         }
         if (!success) promoteWaitingEntries(database, current.product_id);
-        const response = { queue_state: next };
+        const response: PaymentResultResponse = {
+            grant: next.grant!,
+            idempotency_key: request.idempotency_key,
+            already_processed: false,
+        };
         database.paymentResults[request.idempotency_key] = response;
         writeDatabase(database);
-        mockBackend.forgetQueue(current.product_id);
         return response;
     },
-
-    rememberQueue: (productId: string) => {
-        const ids = new Set<string>(JSON.parse(localStorage.getItem(KNOWN_QUEUES_KEY) ?? "[]"));
-        ids.add(productId);
-        localStorage.setItem(KNOWN_QUEUES_KEY, JSON.stringify([...ids]));
-    },
-
-    forgetQueue: (productId: string) => {
-        const ids = new Set<string>(JSON.parse(localStorage.getItem(KNOWN_QUEUES_KEY) ?? "[]"));
-        ids.delete(productId);
-        localStorage.setItem(KNOWN_QUEUES_KEY, JSON.stringify([...ids]));
-    },
-
-    knownQueues: (): string[] =>
-        JSON.parse(localStorage.getItem(KNOWN_QUEUES_KEY) ?? "[]") as string[],
 };

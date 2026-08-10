@@ -1,14 +1,15 @@
 export const routePaths = {
     home: "/",
     itemDetails: "/items/:productId",
-    checkout: "/checkout/:grantId",
+    checkout: "/checkout/:productId/:grantId",
     signIn: "/sign-in",
     signUp: "/sign-up",
     notFound: "*",
 } as const;
 
 export const getItemDetailsPath = (productId: string) => `/items/${productId}`;
-export const getCheckoutPath = (grantId: string) => `/checkout/${grantId}`;
+export const getCheckoutPath = (productId: string, grantId: string) =>
+    `/checkout/${productId}/${grantId}`;
 
 export type AuthMode = "sign-in" | "sign-up";
 

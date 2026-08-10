@@ -13,28 +13,43 @@ export const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQu
     const currentUserId = (api.getState() as RootState).session.user?.id ?? "";
 
     try {
-        if (request.url === "/products") return { data: await mockBackend.listProducts() };
+        if (request.url === "/products")
+            return { data: { products: await mockBackend.listProducts() } };
 
         if (parts[0] === "products" && parts.length === 2 && method === "GET")
             return { data: await mockBackend.getProduct(parts[1]) };
 
         if (parts[0] === "products" && parts[2] === "alternatives")
-            return { data: await mockBackend.getAlternatives(parts[1]) };
+            return { data: { products: await mockBackend.getAlternatives(parts[1]) } };
 
-        if (parts[0] === "products" && parts[2] === "queue" && parts[3] === "me")
+        if (
+            parts[0] === "products" &&
+            parts[2] === "queue" &&
+            parts[3] === "me" &&
+            method === "GET"
+        )
             return { data: await mockBackend.getQueueState(currentUserId, parts[1]) };
 
-        if (parts[0] === "products" && parts[2] === "queue" && method === "POST")
+        if (
+            parts[0] === "products" &&
+            parts[2] === "queue" &&
+            parts[3] === "join" &&
+            method === "POST"
+        )
             return { data: await mockBackend.joinQueue(currentUserId, parts[1]) };
 
-        if (parts[0] === "products" && parts[2] === "queue" && method === "DELETE")
+        if (
+            parts[0] === "products" &&
+            parts[2] === "queue" &&
+            parts[3] === "me" &&
+            method === "DELETE"
+        )
             return { data: await mockBackend.leaveQueue(currentUserId, parts[1]) };
 
-        if (parts[0] === "grants" && parts.length === 2)
-            return { data: await mockBackend.findQueueByGrant(currentUserId, parts[1]) };
-
-        if (parts[0] === "grants" && parts[2] === "checkout")
-            return { data: await mockBackend.startCheckout(currentUserId, parts[1]) };
+        if (parts[0] === "grants" && parts[2] === "checkout") {
+            const queueState = await mockBackend.startCheckout(currentUserId, parts[1]);
+            return { data: { grant: queueState.grant } };
+        }
 
         if (parts[0] === "grants" && parts[2] === "payment-result")
             return {

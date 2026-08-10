@@ -4,9 +4,10 @@ import { assertNever } from "@/shared/lib/assertNever";
 export const getQueueCta = (
     status: QueueEntryStatus | null,
     isLimited: boolean,
-    available: number,
+    isSoldOut: boolean,
     position?: number | null,
 ) => {
+    if (status === "SOLD_OUT" || isSoldOut) return { label: "Товар закончился", disabled: true };
     if (!isLimited) return { label: "Купить", disabled: false };
     if (status === null) return { label: "Купить", disabled: false };
 
@@ -17,17 +18,13 @@ export const getQueueCta = (
             return { label: "Перейти к оформлению", disabled: false };
         case "CHECKOUT_PENDING":
             return { label: "Продолжить оформление", disabled: false };
-        case "SOLD_OUT":
-            return { label: "Товар закончился", disabled: true };
         case "PURCHASED":
         case "JOINING":
         case "EXPIRED":
         case "PAYMENT_FAILED":
         case "CANCELLED":
         case "ERROR":
-            return available > 0
-                ? { label: "Купить", disabled: false }
-                : { label: "Товар закончился", disabled: true };
+            return { label: "Купить", disabled: false };
         default:
             return assertNever(status, "getQueueCta");
     }

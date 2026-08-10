@@ -183,6 +183,18 @@
     gap: 9px;
     align-items: flex-start;
 }
+.alternatives {
+    grid-column: 1 / -1;
+    margin-top: 20px;
+}
+.alternatives h2 {
+    margin: 0 0 20px;
+}
+.alternativesGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 24px;
+}
 
 @media (max-width: 1120px) {
     .page {
@@ -223,6 +235,10 @@
     }
     .queueInfo {
         order: 4;
+    }
+    .alternatives {
+        width: 100%;
+        order: 5;
     }
     .hero {
         height: min(105vw, 500px);

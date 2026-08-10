@@ -14,23 +14,29 @@ export const subscribe = ({ productId, userId, onSignal, onConnectionChange }: S
     let retry = 0;
     let retryTimer: number | undefined;
     let connecting = false;
+
     const connect = async () => {
-        if (stopped || !navigator.onLine || connecting) return;
+        if (stopped || !navigator.onLine || connecting)
+            return;
+
         connecting = true;
         try {
             const response = await fetch(
-                `${import.meta.env.VITE_API_URL ?? "/api/v1"}/products/${productId}/events`,
+                `${import.meta.env.VITE_API_URL ?? "/api/v1"}/products/${productId}/queue/events`,
                 {
                     headers: { Accept: "text/event-stream", "X-Demo-User-ID": userId },
                     signal: controller.signal,
                 },
             );
+
             if (!response.ok || !response.body) throw new Error("SSE connection failed");
             onConnectionChange(true);
             retry = 0;
+
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = "";
+
             while (!stopped) {
                 const { value, done } = await reader.read();
                 if (done) throw new Error("SSE stream ended");

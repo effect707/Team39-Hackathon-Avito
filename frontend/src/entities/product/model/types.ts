@@ -12,7 +12,7 @@ export interface Product {
     price: string;
     isLimited: boolean;
     queue_enabled: boolean;
-    lifecycle_status: "ACTIVE" | "SOLD_OUT" | "INACTIVE";
+    lifecycle_status: "ACTIVE" | "SOLD_OUT" | "REMOVED";
     inventory: InventorySummary;
     image_url?: string;
     images?: string[];
@@ -23,3 +23,12 @@ export interface Product {
 }
 
 export type IProduct = Product;
+
+export type ProductResponse = Omit<Product, "image_url" | "inventory" | "isLimited"> & {
+    image_url: string | null;
+    inventory: Omit<InventorySummary, "total">;
+};
+
+export interface ProductListResponse {
+    products: ProductResponse[];
+}

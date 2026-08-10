@@ -9,7 +9,7 @@ import {
     useJoinQueueMutation,
     useLeaveQueueMutation,
 } from "@/entities/queue";
-import { useGetProductQuery } from "@/entities/product";
+import { ProductCard, useGetAlternativesQuery, useGetProductQuery } from "@/entities/product";
 import { getAuthPath, getCheckoutPath } from "@/shared/config/routes";
 import { getQueueCta } from "@/features/join-queue";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -17,6 +17,8 @@ import { Loader } from "@/shared/ui/Loader";
 import { formatPrice } from "@/shared/lib/format/price";
 import { getStockLabel } from "../lib/getStockLabel";
 import styles from "./ItemDetailsPage.module.css";
+
+const unsuccessfulStatuses = new Set(["EXPIRED", "PAYMENT_FAILED", "SOLD_OUT"]);
 
 const QueueModal = lazy(() =>
     import("@/widgets/purchase-queue-modal").then((module) => ({
@@ -49,6 +51,18 @@ export const ItemDetailsPage = () => {
         skip: !user,
         refetchOnMountOrArgChange: true,
     });
+    const productSoldOut = Boolean(
+        product &&
+        (product.lifecycle_status !== "ACTIVE" ||
+            (product.inventory.total > 0 && product.inventory.sold === product.inventory.total)),
+    );
+    const showAlternatives = Boolean(
+        (queueState && unsuccessfulStatuses.has(queueState.status)) || productSoldOut,
+    );
+    const { data: alternatives = [], isLoading: alternativesLoading } = useGetAlternativesQuery(
+        productId,
+        { skip: !showAlternatives },
+    );
     const [joinQueue, joinResult] = useJoinQueueMutation();
     const [leaveQueue, leaveResult] = useLeaveQueueMutation();
     const resumeQueue = Boolean((location.state as { resumeQueue?: boolean } | null)?.resumeQueue);
@@ -59,7 +73,7 @@ export const ItemDetailsPage = () => {
     const cta = getQueueCta(
         queueState?.status ?? null,
         product.isLimited,
-        product.inventory.available,
+        productSoldOut,
         queueState?.position,
     );
     const stockLabel = getStockLabel(
@@ -84,7 +98,7 @@ export const ItemDetailsPage = () => {
             (queueState?.status === "GRANTED" || queueState?.status === "CHECKOUT_PENDING") &&
             queueState.grant
         ) {
-            navigate(getCheckoutPath(queueState.grant.id));
+            navigate(getCheckoutPath(product.id, queueState.grant.id));
             return;
         }
         if (!product.isLimited && product.inventory.available <= 0) {
@@ -94,7 +108,8 @@ export const ItemDetailsPage = () => {
         try {
             const next = await joinQueue(product.id).unwrap();
             if (next.status === "WAITING" && product.isLimited) setQueueOpen(true);
-            if (next.status === "GRANTED" && next.grant) navigate(getCheckoutPath(next.grant.id));
+            if (next.status === "GRANTED" && next.grant)
+                navigate(getCheckoutPath(product.id, next.grant.id));
         } catch {
             message.error("Не удалось присоединиться к очереди");
         }
@@ -127,21 +142,31 @@ export const ItemDetailsPage = () => {
                         ))}
                     </div>
                 </div>
-                <h2>Характеристики</h2>
-                <dl className={styles.characteristics}>
-                    {product.characteristics?.map((item) => (
-                        <div key={item.label}>
-                            <dt>{item.label}</dt>
-                            <dd>{item.value}</dd>
-                        </div>
-                    ))}
-                </dl>
-                <h2>Описание</h2>
-                <p className={styles.description}>{product.description}</p>
-                <p className={styles.location}>
-                    <MapPin size={20} />
-                    {product.location}
-                </p>
+                {product.characteristics?.length ? (
+                    <>
+                        <h2>Характеристики</h2>
+                        <dl className={styles.characteristics}>
+                            {product.characteristics.map((item) => (
+                                <div key={item.label}>
+                                    <dt>{item.label}</dt>
+                                    <dd>{item.value}</dd>
+                                </div>
+                            ))}
+                        </dl>
+                    </>
+                ) : null}
+                {product.description ? (
+                    <>
+                        <h2>Описание</h2>
+                        <p className={styles.description}>{product.description}</p>
+                    </>
+                ) : null}
+                {product.location ? (
+                    <p className={styles.location}>
+                        <MapPin size={20} />
+                        {product.location}
+                    </p>
+                ) : null}
             </section>
             <aside className={styles.purchase}>
                 <div className={styles.purchaseCard}>
@@ -163,12 +188,14 @@ export const ItemDetailsPage = () => {
                     </Button>
                     {queueState && <p className={styles.stateMessage}>{queueState.message}</p>}
                 </div>
-                <div className={styles.seller}>
-                    <span>Продавец</span>
-                    <h3>{product.seller?.name}</h3>
-                    <Rate disabled allowHalf value={product.seller?.rating} />
-                    <b>{product.seller?.rating}</b>
-                </div>
+                {product.seller ? (
+                    <div className={styles.seller}>
+                        <span>Продавец</span>
+                        <h3>{product.seller.name}</h3>
+                        <Rate disabled allowHalf value={product.seller.rating} />
+                        <b>{product.seller.rating}</b>
+                    </div>
+                ) : null}
             </aside>
             {product.isLimited && (
                 <aside className={styles.queueInfo}>
@@ -188,12 +215,26 @@ export const ItemDetailsPage = () => {
                             </li>
                             <li>
                                 <Clock3 size={18} />
-                                На оформление даётся 10 минут
+                                Срок оформления определяет сервер
                             </li>
                         </ul>
                     </div>
                 </aside>
             )}
+            {showAlternatives ? (
+                <section className={styles.alternatives}>
+                    <h2>Похожие объявления</h2>
+                    {alternativesLoading ? (
+                        <Skeleton active paragraph={{ rows: 3 }} />
+                    ) : (
+                        <div className={styles.alternativesGrid}>
+                            {alternatives.map((alternative) => (
+                                <ProductCard key={alternative.id} product={alternative} />
+                            ))}
+                        </div>
+                    )}
+                </section>
+            ) : null}
             {queueState?.status === "WAITING" && queueModalOpen && (
                 <Suspense fallback={<Loader />}>
                     <QueueModal

@@ -2,6 +2,7 @@ import { configureStore, createListenerMiddleware, isAnyOf } from "@reduxjs/tool
 import { baseApi } from "@/shared/api/baseApi";
 import { notificationReducer } from "@/entities/notification";
 import { sessionReducer, signedIn, signedOut } from "@/entities/session";
+import { queueWatchReducer } from "@/entities/queue/model/queueWatchSlice";
 
 const sessionListener = createListenerMiddleware();
 
@@ -17,6 +18,7 @@ export const makeStore = () =>
         reducer: {
             [baseApi.reducerPath]: baseApi.reducer,
             session: sessionReducer,
+            queueWatch: queueWatchReducer,
             notifications: notificationReducer,
         },
         middleware: (getDefaultMiddleware) =>
