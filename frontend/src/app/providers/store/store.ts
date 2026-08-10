@@ -1,6 +1,6 @@
 import { configureStore, createListenerMiddleware, isAnyOf } from "@reduxjs/toolkit";
 import { baseApi } from "@/shared/api/baseApi";
-import { notificationReducer } from "@/entities/notification";
+import { notificationReducer, notificationsHydrated, notificationsReset } from "@/entities/notification";
 import { sessionReducer, signedIn, signedOut } from "@/entities/session";
 import { queueWatchReducer } from "@/entities/queue/model/queueWatchSlice";
 
@@ -8,8 +8,10 @@ const sessionListener = createListenerMiddleware();
 
 sessionListener.startListening({
     matcher: isAnyOf(signedIn, signedOut),
-    effect: (_action, listenerApi) => {
+    effect: (action, listenerApi) => {
         listenerApi.dispatch(baseApi.util.resetApiState());
+        if (signedIn.match(action)) listenerApi.dispatch(notificationsHydrated(action.payload.id));
+        else listenerApi.dispatch(notificationsReset());
     },
 });
 

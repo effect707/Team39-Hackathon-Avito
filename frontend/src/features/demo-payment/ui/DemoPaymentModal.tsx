@@ -1,4 +1,5 @@
 import { Button, Modal } from "antd";
+import { CheckCircle2 } from "lucide-react";
 import type { PaymentResultRequest } from "@/entities/queue";
 import styles from "./DemoPaymentModal.module.css";
 
@@ -56,15 +57,21 @@ export const PaymentResultModal = ({
         footer={null}
         onCancel={onClose}
     >
-        <span className={status === "success" ? styles.success : styles.failure}>
-            {status === "success"
-                ? "Готово"
-                : status === "timeout"
-                  ? "Время истекло"
-                  : "Ошибка оплаты"}
-        </span>
+        {status === "success" ? (
+            <div className={styles.successIcon} aria-hidden="true">
+                <CheckCircle2 size={34} strokeWidth={2.2} />
+            </div>
+        ) : (
+            <span className={status === "timeout" ? styles.failure : styles.failure}>
+                {status === "timeout" ? "Время истекло" : "Ошибка оплаты"}
+            </span>
+        )}
+        {status === "success" && <span className={styles.success}>Покупка завершена</span>}
         <h2 className={styles.title}>{message}</h2>
-        <p className={styles.copy}>{nextAction}</p>
+        {status !== "success" && <p className={styles.copy}>{nextAction}</p>}
+        {status === "success" && (
+            <p className={styles.orderNote}>Заказ сохранён. Спасибо за покупку!</p>
+        )}
         <Button type="primary" onClick={onClose}>
             {status === "success" ? "Вернуться к покупкам" : "Понятно"}
         </Button>

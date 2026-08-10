@@ -10,6 +10,7 @@ import {
     useLeaveQueueMutation,
 } from "@/entities/queue";
 import { ProductCard, useGetAlternativesQuery, useGetProductQuery } from "@/entities/product";
+import { getCountdown } from "@/entities/grant";
 import { getAuthPath, getCheckoutPath } from "@/shared/config/routes";
 import { getQueueCta } from "@/features/join-queue";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -46,8 +47,9 @@ export const ItemDetailsPage = () => {
     const navigate = useNavigate();
     const [activeImage, setActiveImage] = useState(0);
     const [queueOpen, setQueueOpen] = useState(false);
+    const [now, setNow] = useState(() => Date.now());
     const { data: product, isLoading, isError, refetch } = useGetProductQuery(productId);
-    const { data: queueState } = useGetMyQueueStateQuery(productId, {
+    const { data: queueState, refetch: refetchQueue } = useGetMyQueueStateQuery(productId, {
         skip: !user,
         refetchOnMountOrArgChange: true,
     });
@@ -67,6 +69,22 @@ export const ItemDetailsPage = () => {
     const [leaveQueue, leaveResult] = useLeaveQueueMutation();
     const resumeQueue = Boolean((location.state as { resumeQueue?: boolean } | null)?.resumeQueue);
     const queueModalOpen = queueOpen || resumeQueue;
+    const hasActiveGrant = Boolean(
+        queueState?.grant &&
+        (queueState.status === "GRANTED" || queueState.status === "CHECKOUT_PENDING"),
+    );
+    const countdown = getCountdown(queueState?.grant?.expires_at ?? "", now);
+    const grantExpired = hasActiveGrant && countdown.totalSeconds === 0;
+
+    useEffect(() => {
+        if (!hasActiveGrant) return;
+        const timer = window.setInterval(() => setNow(Date.now()), 1000);
+        return () => window.clearInterval(timer);
+    }, [hasActiveGrant]);
+
+    useEffect(() => {
+        if (hasActiveGrant && countdown.totalSeconds === 0) void refetchQueue?.();
+    }, [countdown.totalSeconds, hasActiveGrant, refetchQueue]);
 
     if (isLoading) return <Skeleton active paragraph={{ rows: 12 }} />;
     if (isError || !product) return <ErrorState onRetry={refetch} />;
@@ -75,9 +93,13 @@ export const ItemDetailsPage = () => {
         product.isLimited,
         productSoldOut,
         queueState?.position,
+        grantExpired,
     );
     const stockLabel = getStockLabel(
         product.inventory.available,
+        product.inventory.reserved,
+        product.inventory.sold,
+        product.inventory.total,
         queueState?.status ?? null,
         product.isLimited,
     );
@@ -92,6 +114,10 @@ export const ItemDetailsPage = () => {
         }
         if (product.isLimited && queueState?.status === "WAITING") {
             setQueueOpen(true);
+            return;
+        }
+        if (grantExpired) {
+            void refetchQueue?.();
             return;
         }
         if (
@@ -186,7 +212,15 @@ export const ItemDetailsPage = () => {
                     >
                         {cta.label}
                     </Button>
-                    {queueState && <p className={styles.stateMessage}>{queueState.message}</p>}
+                    {queueState && !hasActiveGrant && (
+                        <p className={styles.stateMessage}>{queueState.message}</p>
+                    )}
+                    {hasActiveGrant && (
+                        <div className={styles.purchaseTimer} role="timer">
+                            <Clock3 size={18} />
+                            <span>Время на покупку: {countdown.label}</span>
+                        </div>
+                    )}
                 </div>
                 {product.seller ? (
                     <div className={styles.seller}>
@@ -235,20 +269,22 @@ export const ItemDetailsPage = () => {
                     )}
                 </section>
             ) : null}
-            {queueState?.status === "WAITING" && queueModalOpen && (
-                <Suspense fallback={<Loader />}>
-                    <QueueModal
-                        open
-                        state={queueState}
-                        leaving={leaveResult.isLoading}
-                        onClose={() => {
-                            setQueueOpen(false);
-                            navigate(location.pathname, { replace: true, state: null });
-                        }}
-                        onLeave={handleLeave}
-                    />
-                </Suspense>
-            )}
+            {(queueState?.status === "WAITING" || queueState?.status === "SOLD_OUT") &&
+                queueModalOpen && (
+                    <Suspense fallback={<Loader />}>
+                        <QueueModal
+                            open
+                            state={queueState}
+                            leaving={leaveResult.isLoading}
+                            alternatives={alternatives}
+                            onClose={() => {
+                                setQueueOpen(false);
+                                navigate(location.pathname, { replace: true, state: null });
+                            }}
+                            onLeave={handleLeave}
+                        />
+                    </Suspense>
+                )}
             {resumeQueue && !queueState && (
                 <ResumeQueueAction
                     onResume={() => {

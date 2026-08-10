@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { AntdProvider } from "@/app/providers";
 import { makeStore } from "@/app/providers/store/store";
+import { signedIn } from "@/entities/session";
 import { mockProducts } from "@mocks/mockData";
 import { OrderPage } from "./OrderPage";
 
@@ -62,6 +63,7 @@ describe("OrderPage", () => {
     it("blocks payment and shows an expiry modal", async () => {
         const user = userEvent.setup();
         const store = makeStore();
+        store.dispatch(signedIn({ id: "user-1", name: "Анна", login: "anna" }));
 
         render(
             <Provider store={store}>

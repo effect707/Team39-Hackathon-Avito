@@ -31,6 +31,7 @@ describe("NotificationsDropdown", () => {
                         readNotificationId = notificationId;
                     }}
                     onAllNotificationsRead={() => undefined}
+                    onNotificationsClear={() => undefined}
                 />
                 <Location />
             </MemoryRouter>,

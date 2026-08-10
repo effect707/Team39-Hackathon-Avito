@@ -29,8 +29,27 @@
     height: 50px;
 }
 .success {
+    display: block;
+    margin-top: 18px;
     color: #00a56a;
+    font-weight: 700;
 }
 .failure {
     color: #f05454;
+}
+.successIcon {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+    color: #00a56a;
+    background: #e8faf3;
+}
+.orderNote {
+    margin: 18px 0 24px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    color: #166b4e;
+    background: #f0fbf6;
 }
