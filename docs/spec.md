@@ -409,9 +409,8 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    U["Browser: React + TypeScript"] --> N["Nginx"]
-    N --> A1["Go API replica 1"]
-    N --> A2["Go API replica 2"]
+    U["Browser: React + TypeScript"] -->|"Configured API URL"| A1["Go API replica 1"]
+    T["Integration and load clients"] --> A2["Go API replica 2"]
     A1 --> P[("PostgreSQL")]
     A2 --> P
     W["Go expiry worker"] --> P
@@ -420,6 +419,8 @@ flowchart LR
     A1 --> M["Mock Auth / Checkout / Payment"]
     A2 --> M
 ```
+
+Backend Compose публикует реплики напрямую на разных портах без прозрачной балансировки: локально `api-1` использует `:8080`, а `api-2` — `:8081`. В production `api-1` доступна публично на `:80`, `api-2` привязана к `127.0.0.1:8081`, а metrics-listeners на `:9090` остаются внутри compose-сети. Frontend собирается и развёртывается независимо.
 
 ### 13.2. Backend-модули
 
@@ -650,7 +651,7 @@ Redux/MobX/Effector не требуются, если серверного со�
 ├── frontend/
 │   ├── src/
 │   └── tests/
-├── deploy/nginx/
+├── deploy/
 └── tools/loadgen/
 ```
 
@@ -660,8 +661,6 @@ Redux/MobX/Effector не требуются, если серверного со�
 
 Compose поднимает:
 
-- `frontend`;
-- `nginx`;
 - `api-1` и `api-2`;
 - `worker`;
 - `postgres`;
@@ -673,8 +672,9 @@ Compose поднимает:
 - healthchecks определяют порядок готовности;
 - PostgreSQL использует именованный volume;
 - секреты не коммитятся, обязательные значения перечислены в `.env.example`;
-- Nginx маршрутизирует REST и SSE и отключает buffering для SSE;
-- публичный Ubuntu-сервер позволяет жюри пройти основной сценарий по ссылке;
+- REST и SSE обслуживаются напрямую каждой API-репликой, metrics-listeners не публикуются на host;
+- frontend проходит отдельные lint/build/release-проверки и не запускается backend Compose;
+- публичный Ubuntu-сервер предоставляет backend API, а пользовательский frontend развёртывается отдельно;
 - demo seed выполняется документированной командой и идемпотентен.
 
 ## 21. Нефункциональные требования
@@ -765,7 +765,7 @@ Compose поднимает:
 - demo-auth middleware и стабильные ошибки;
 - SSE и PostgreSQL notifications;
 - health/readiness, логи и метрики;
-- Docker Compose, Nginx, CI и Ubuntu-деплой;
+- backend Compose, CI и Ubuntu-деплой;
 - load generator и сквозная интеграция.
 
 ### Backend 2 — FIFO Queue Engine
@@ -864,7 +864,7 @@ MVP готов, если:
 | 3 | Работает путь join → grant/wait | Интеграция handlers, логи | Leave, идемпотентность, PostgreSQL integration tests | TTL worker, release/promotion | Подключение реального REST, восстановление после reload |
 | 4 | Работает полный жизненный цикл покупки | SSE и `LISTEN/NOTIFY` | Закрытие очереди и sold-out transitions | Checkout guard, адаптеры Checkout/Payment, callback idempotency | SSE/reconnect, таймер, demo-переход к checkout и терминальные экраны |
 | 5 | Доказана конкурентная корректность | Loadgen, метрики, две API-реплики | Тест 100/5 и FIFO-review | Expiry-vs-checkout, два worker, failure cases | Альтернативы, UI tests, адаптивность |
-| 6 | Публичный release candidate | Ubuntu/Nginx/TLS, CI hardening | Исправления интеграции, docs | Исправления интеграции, docs | Production build, E2E и polish |
+| 6 | Публичный release candidate | Ubuntu backend deploy, CI hardening | Исправления интеграции, docs | Исправления интеграции, docs | Production build, E2E и polish |
 | 7 | Заморозка MVP и готовое демо | Полный `make verify`, backup demo, мониторинг | Финальный review инвариантов | Финальный review checkout/grant | Проверка всех путей на публичной ссылке |
 
 После середины шестого дня новые функции не добавляются. Остаток времени используется на блокирующие дефекты, документацию, воспроизводимость запуска и две репетиции демонстрации.

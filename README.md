@@ -2,7 +2,7 @@
 
 Хакатонный MVP строгой FIFO-очереди перед checkout для дефицитных товаров. Backend выдаёт временное персональное право на покупку, а после отказа, payment failure или истечения TTL передаёт единицу следующему участнику.
 
-API, worker, SQL-migrator, React frontend, PostgreSQL 17, две API-реплики и Nginx запускаются целиком. Frontend по умолчанию использует реальные product/queue/SSE/checkout/payment endpoints; browser mock включается только явным frontend-режимом.
+Backend Compose запускает PostgreSQL 17, SQL-migrator, worker и две API-реплики с реальными product/queue/SSE/checkout endpoints. React frontend собирается и запускается отдельно, по умолчанию обращается к backend API, а browser mock включается только явным frontend-режимом.
 
 ## Источники истины
 
@@ -16,19 +16,18 @@ API, worker, SQL-migrator, React frontend, PostgreSQL 17, две API-репли�
 ## Архитектура
 
 ```text
-браузер
-   │
+React frontend (отдельный build/deploy)
+   │ configured API URL
    ▼
-edge Nginx :8080/:80
-   ├── /          → frontend Nginx → React/Vite assets
-   └── /api/*    → api-1 / api-2 → PostgreSQL 17
-                               ▲
-                         worker + migrator
+api-1 :8080 ───────────┐
+                       ├── PostgreSQL 17
+api-2 :8081 ───────────┘        ▲
+                           worker + migrator
 ```
 
 Backend — модульный монолит на Go. PostgreSQL — единственный источник истины для остатка, FIFO-порядка, права на checkout и TTL. Две API-реплики и worker не делят process-memory state. Строгий FIFO определяется минимальным `ticket_no`, а не `created_at` и не случайным розыгрышем.
 
-Nginx публикует только UI и `/api/`. Backend `/metrics` остаётся внутри compose-сети. Для SSE отключена proxy-буферизация и увеличены streaming timeouts; событие лишь сигнализирует frontend перечитать REST-state.
+API-реплики публикуются напрямую на разных портах, без прозрачной балансировки или failover одного URL. `/metrics` обслуживается отдельным listener на `:9090` только внутри compose-сети. SSE отдаётся Go API напрямую; событие лишь сигнализирует frontend перечитать REST-state.
 
 ## Локальный запуск
 
@@ -43,11 +42,12 @@ make seed
 
 После запуска:
 
-- UI: `http://localhost:8080/`;
-- liveness: `http://localhost:8080/api/v1/health`;
-- readiness PostgreSQL: `http://localhost:8080/api/v1/ready`.
+- api-1 liveness: `http://localhost:8080/api/v1/health`;
+- api-1 readiness PostgreSQL: `http://localhost:8080/api/v1/ready`;
+- api-2 liveness: `http://localhost:8081/api/v1/health`;
+- api-2 readiness PostgreSQL: `http://localhost:8081/api/v1/ready`.
 
-PostgreSQL и API не публикуют порты на host. `make down` останавливает стенд, но не удаляет volume с данными.
+Порты реплик настраиваются через `API_1_PORT` и `API_2_PORT`, внутренний listener метрик — через `METRICS_ADDRESS`. Frontend этим Compose не запускается. PostgreSQL и metrics-listeners не публикуются на host. `make down` останавливает стенд, но не удаляет volume с данными.
 
 Seed идемпотентен и создаёт:
 
@@ -70,7 +70,7 @@ Seed идемпотентен и создаёт:
 | `make test-race` | Go race detector |
 | `make test-integration` | миграции/seed/constraints на чистом PostgreSQL 17 |
 | `make build` | production Go и Vite builds |
-| `make smoke` | UI/health/ready через Nginx и failover после остановки `api-1` |
+| `make smoke` | health/ready обеих API-реплик и доступность `api-2` после остановки `api-1` |
 | `make logs` | последние compose-логи |
 | `make verify` | format-check, lint, unit/race/integration, contracts/configs и builds |
 
@@ -130,14 +130,14 @@ sudo AVITO_DEPLOY_SSH_PUBLIC_KEY='ssh-ed25519 AAAA...' bash deploy/scripts/boots
 
 Fingerprint host key для `DEPLOY_KNOWN_HOSTS` нужно сверить через консоль хостера или другой доверенный канал; не принимайте непроверенный `ssh-keyscan` как доказательство подлинности.
 
-Деплой копирует compose/Nginx и script, пишет `.env` с mode `0600`, временно авторизует сервер в GHCR через job-scoped `GITHUB_TOKEN`, выполняет `pull`, `migrate`, `up -d` и readiness retry, затем удаляет временные файлы и делает `docker logout`. Production concurrency-group не пускает два деплоя одновременно. При ошибке workflow печатает не более 120 строк логов на сервис и завершается failed.
+Деплой копирует backend Compose и script, пишет `.env` с mode `0600`, временно авторизует сервер в GHCR через job-scoped `GITHUB_TOKEN`, выполняет `pull`, `migrate`, `up -d` и readiness retry обеих реплик, затем удаляет временные файлы и делает `docker logout`. `api-1` публикуется на порту 80, а `api-2` доступна только через `127.0.0.1:8081`; прозрачного failover нет. Production concurrency-group не пускает два деплоя одновременно. При ошибке workflow печатает не более 120 строк логов на сервис и завершается failed.
 
 Логи на сервере:
 
 ```bash
 cd /opt/avito-fair-queue
 docker compose --env-file .env -f docker-compose.prod.yml ps
-docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 api-1 api-2 worker nginx
+docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 api-1 api-2 worker
 ```
 
 Автоматического rollback миграций нет. Приложение можно вернуть на прошлый совместимый `IMAGE_TAG`, но откат схемы выполняется только после ручного анализа и backup.

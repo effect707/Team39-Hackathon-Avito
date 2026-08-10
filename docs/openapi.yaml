@@ -13,7 +13,7 @@ tags:
   - name: Products
   - name: Queue
   - name: Checkout
-  - name: Payment
+  - name: Demo
 paths:
   /api/v1/health:
     get:
@@ -210,16 +210,16 @@ paths:
           $ref: '#/components/responses/GrantNotFound'
         '409':
           $ref: '#/components/responses/GrantConflict'
-  /api/v1/grants/{grant_id}/payment-result:
+  /api/v1/demo/grants/{grant_id}/payment-result:
     parameters:
       - $ref: '#/components/parameters/GrantId'
     post:
-      tags: [Payment]
-      summary: Передать результат mock Payment
+      tags: [Demo]
+      summary: Передать demo-результат mock Payment
       description: >-
-        Повтор с тем же idempotency_key возвращает уже зафиксированный
-        результат без нового эффекта.
-      operationId: submitPaymentResult
+        Доступно только в demo-режиме. Повтор с тем же idempotency_key
+        возвращает уже зафиксированный результат без нового эффекта.
+      operationId: submitDemoPaymentResult
       security:
         - DemoUser: []
       requestBody:

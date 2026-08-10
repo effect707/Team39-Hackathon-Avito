@@ -51,11 +51,11 @@ export const mockBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQu
             return { data: { grant: queueState.grant } };
         }
 
-        if (parts[0] === "grants" && parts[2] === "payment-result")
+        if (parts[0] === "demo" && parts[1] === "grants" && parts[3] === "payment-result")
             return {
                 data: await mockBackend.submitPayment(
                     currentUserId,
-                    parts[1],
+                    parts[2],
                     request.body as PaymentResultRequest,
                 ),
             };

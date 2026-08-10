@@ -85,7 +85,7 @@ export const queueApi = baseApi.injectEndpoints({
             { grantId: string; request: PaymentResultRequest }
         >({
             query: ({ grantId, request }) => ({
-                url: `/grants/${grantId}/payment-result`,
+                url: `/demo/grants/${grantId}/payment-result`,
                 method: "POST",
                 body: request,
             }),

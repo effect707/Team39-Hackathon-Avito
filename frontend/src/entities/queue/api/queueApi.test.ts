@@ -87,4 +87,25 @@ describe("queueApi backend contract", () => {
 
         expect(state).toBeNull();
     });
+
+    it("submits mock payment results through the demo-only backend route", async () => {
+        const query = vi.fn(async () => ({ data: {} }));
+        configureBaseQuery(query as BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError>);
+        const store = makeStore();
+        const grantId = "50000000-0000-4000-8000-000000000001";
+        const request = {
+            idempotency_key: "60000000-0000-4000-8000-000000000001",
+            result: "success" as const,
+        };
+
+        await store
+            .dispatch(queueApi.endpoints.submitDemoPaymentResult.initiate({ grantId, request }))
+            .unwrap();
+
+        expect(query).toHaveBeenCalledWith(
+            { url: `/demo/grants/${grantId}/payment-result`, method: "POST", body: request },
+            expect.anything(),
+            undefined,
+        );
+    });
 });

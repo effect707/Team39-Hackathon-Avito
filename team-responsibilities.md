@@ -32,7 +32,7 @@
 - `backend/internal/platform`;
 - `backend/internal/events`;
 - общая HTTP-инфраструктура;
-- `deploy/nginx`;
+- backend deploy scripts;
 - `tools/loadgen`;
 - `Dockerfile`, `docker-compose.yml`, `Makefile`;
 - CI, observability и публичный Ubuntu-деплой.
@@ -74,21 +74,14 @@
 
 ### DevOps-задачи
 
-1. Подготовить Dockerfile для frontend, API и worker.
+1. Подготовить Dockerfile для API и worker; frontend Dockerfile остаётся в зоне frontend-разработчика.
 2. Подготовить Docker Compose с сервисами:
-   - `frontend`;
-   - `nginx`;
    - `api-1`;
    - `api-2`;
    - `worker`;
    - `postgres`;
    - `migrate`.
-3. Настроить Nginx:
-   - раздача frontend;
-   - балансировка между `api-1` и `api-2`;
-   - проксирование REST;
-   - отключение buffering для SSE;
-   - увеличенный timeout для SSE.
+3. Опубликовать API-реплики напрямую на разных портах, оставить metrics-listeners только внутри compose-сети и документировать отсутствие прозрачного failover.
 4. Создать `.env.example`, healthchecks и PostgreSQL volume.
 5. Настроить CI:
    - backend format/lint/test;
@@ -100,12 +93,12 @@
 
 ### Критерии приёмки роли
 
-- `docker compose up --build` запускает проект без ручной настройки;
-- Nginx распределяет запросы между двумя API-репликами;
-- SSE работает через Nginx и восстанавливается после reconnect;
+- `docker compose up --build` запускает backend-контур без ручной настройки;
+- обе API-реплики доступны по собственным адресам;
+- SSE работает напрямую через Go API и восстанавливается после reconnect;
 - отключение одной API-реплики не теряет место пользователя;
 - loadgen подтверждает результат `5 GRANTED + 95 WAITING`;
-- публичная ссылка открывается на чистом устройстве;
+- публичный backend endpoint доступен на чистом устройстве;
 - `make verify` запускает все основные проверки.
 
 ## 4. Backend 2 — FIFO Queue Engine
